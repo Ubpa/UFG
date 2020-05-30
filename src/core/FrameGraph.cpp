@@ -63,6 +63,8 @@ void FrameGraph::Execute() {
 
 	for (auto i : compileResult.sortedPasses) {
 		const auto& pass = passes[i];
+		
+		map<string, Resource> passResources;
 
 		for (auto input : pass.Inputs()) {
 			auto target = resourceMap.find(input.name);
@@ -73,6 +75,8 @@ void FrameGraph::Execute() {
 				if (resource.state != input.state)
 					rsrcMngr->Transition(resource, input.state);
 			}
+
+			passResources[input.name] = resourceMap[input.name];
 		}
 		for (auto output : pass.Outputs()) {
 			auto target = resourceMap.find(output.name);
@@ -83,9 +87,11 @@ void FrameGraph::Execute() {
 				if (resource.state != output.state)
 					rsrcMngr->Transition(resource, output.state);
 			}
+
+			passResources[output.name] = resourceMap[output.name];
 		}
 
-		pass.Execute(resourceMap);
+		pass.Execute(passResources);
 
 		auto target = needRecycle.find(i);
 		if (target != needRecycle.end()) {

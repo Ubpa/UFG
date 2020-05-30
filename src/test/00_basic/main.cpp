@@ -22,6 +22,7 @@ protected:
 		cout << "[Create] " << num << endl;
 		return reinterpret_cast<void*>(num++);
 	}
+
 	virtual void Init(const void* type, void* ptr, size_t state) const override {
 		cout << "[Init] " << ptr << ": " << state << endl;
 	}
@@ -55,7 +56,8 @@ int main() {
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.type << endl;
+					<< "    - ptr : " << rsrc.type << endl
+					<< "    - state : " << rsrc.state << endl;
 			}
 		},
 		"Depth pass" };
@@ -70,7 +72,8 @@ int main() {
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.ptr << endl;
+					<< "    - ptr : " << rsrc.ptr << endl
+					<< "    - state : " << rsrc.state << endl;
 			}
 		},
 		"GBuffer pass" };
@@ -85,7 +88,8 @@ int main() {
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.ptr << endl;
+					<< "    - ptr : " << rsrc.ptr << endl
+					<< "    - state : " << rsrc.state << endl;
 			}
 		},
 		"Lighting" };
@@ -100,7 +104,8 @@ int main() {
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.ptr << endl;
+					<< "    - ptr : " << rsrc.ptr << endl
+					<< "    - state : " << rsrc.state << endl;
 			}
 		},
 		"Post" };
