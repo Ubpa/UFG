@@ -13,7 +13,7 @@ FrameGraph::~FrameGraph() {
 	delete rsrcMngr;
 }
 
-const CompileResult& FrameGraph::Compile() {
+void FrameGraph::Compile() {
 	compileResult.Clear();
 
 	for (size_t i = 0; i < passes.size(); i++) {
@@ -39,15 +39,17 @@ const CompileResult& FrameGraph::Compile() {
 	for (size_t i = 0; i < compileResult.sortedPasses.size(); i++)
 		index2order.emplace(compileResult.sortedPasses[i], i);
 	for (auto& [name, info] : compileResult.resource2info) {
-		if (info.readers.empty())
-			continue;
-		size_t last = 0;
-		for (const auto& reader : info.readers)
-			last = std::max(last, index2order.find(reader)->second);
-		info.last = last;
+		if (imports.find(name) != imports.end())
+			info.last = static_cast<size_t>(-1);
+		else if (!info.readers.empty()) {
+			size_t last = 0;
+			for (const auto& reader : info.readers)
+				last = std::max(last, index2order.find(reader)->second);
+			info.last = last;
+		}
+		else
+			info.last = info.writer;
 	}
-
-	return compileResult;
 }
 
 void FrameGraph::Execute() {
@@ -64,32 +66,32 @@ void FrameGraph::Execute() {
 	for (auto i : compileResult.sortedPasses) {
 		const auto& pass = passes[i];
 		
-		map<string, Resource> passResources;
+		map<string, const Resource*> passResources;
 
-		for (auto input : pass.Inputs()) {
-			auto target = resourceMap.find(input.name);
-			if (target == resourceMap.end())
-				resourceMap[input.name] = rsrcMngr->Request(input.type, input.state);
-			else {
-				auto& resource = target->second;
-				if (resource.state != input.state)
-					rsrcMngr->Transition(resource, input.state);
+		auto findRsrc = [&](ResourceDecs decs) -> Resource* {
+			Resource* rsrc;
+			auto target = resourceMap.find(decs.name);
+			if (target == resourceMap.end()) {
+				rsrc = &resourceMap[decs.name];
+				auto import_target = imports.find(decs.name);
+				if (import_target != imports.end())
+					*rsrc = import_target->second;
+				else
+					*rsrc = rsrcMngr->Request(decs.type, decs.state);
 			}
+			else
+				rsrc = &target->second;
 
-			passResources[input.name] = resourceMap[input.name];
-		}
-		for (auto output : pass.Outputs()) {
-			auto target = resourceMap.find(output.name);
-			if (target == resourceMap.end())
-				resourceMap[output.name] = rsrcMngr->Request(output.type, output.state);
-			else {
-				auto& resource = target->second;
-				if (resource.state != output.state)
-					rsrcMngr->Transition(resource, output.state);
-			}
+			if (rsrc->state != decs.state)
+				rsrcMngr->Transition(rsrc, decs.state);
 
-			passResources[output.name] = resourceMap[output.name];
-		}
+			return rsrc;
+		};
+
+		for (auto input : pass.Inputs())
+			passResources[input.name] = findRsrc(input);
+		for (auto output : pass.Outputs())
+			passResources[output.name] = findRsrc(output);
 
 		pass.Execute(passResources);
 
@@ -101,4 +103,10 @@ void FrameGraph::Execute() {
 			}
 		}
 	}
+}
+
+void FrameGraph::Clear() {
+	compileResult.Clear();
+	imports.clear();
+	passes.clear();
 }

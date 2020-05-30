@@ -12,9 +12,9 @@ struct Type {
 
 class TestResourceMngr : public FG::ResourceMngr {
 public:
-	virtual void Transition(FG::Resource& resource, size_t state) override {
-		cout << "[Transition] " << resource.ptr << ": " << resource.state << "->" << state << endl;
-		resource.state = state;
+	virtual void Transition(FG::Resource* resource, size_t state) override {
+		cout << "[Transition] " << resource->ptr << ": " << resource->state << "->" << state << endl;
+		resource->state = state;
 	}
 protected:
 	virtual void* Create(const void* type, size_t state) const override {
@@ -49,15 +49,15 @@ int main() {
 	FG::Pass depthpass{
 		{},
 		{depthbuffer_write},
-		[](const map<string, FG::Resource>& resources) {
+		[](const map<string, const FG::Resource*>& resources) {
 			cout << "- Depth pass" << endl;
 			for (const auto& [name, rsrc] : resources) {
-				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				auto type = reinterpret_cast<const Type*>(rsrc->type);
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.type << endl
-					<< "    - state : " << rsrc.state << endl;
+					<< "    - ptr : " << rsrc->ptr << endl
+					<< "    - state : " << rsrc->state << endl;
 			}
 		},
 		"Depth pass" };
@@ -65,15 +65,15 @@ int main() {
 	FG::Pass gbufferpass{
 		{depthbuffer_read},
 		{gbuffer1_write, gbuffer2_write, gbuffer3_write},
-		[](const map<string, FG::Resource>& resources) {
+		[](const map<string, const FG::Resource*>& resources) {
 			cout << "- GBuffer pass" << endl;
 			for (const auto& [name, rsrc] : resources) {
-				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				auto type = reinterpret_cast<const Type*>(rsrc->type);
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.ptr << endl
-					<< "    - state : " << rsrc.state << endl;
+					<< "    - ptr : " << rsrc->ptr << endl
+					<< "    - state : " << rsrc->state << endl;
 			}
 		},
 		"GBuffer pass" };
@@ -81,15 +81,15 @@ int main() {
 	FG::Pass lighting{
 		{gbuffer1_read, gbuffer2_read, gbuffer3_read, depthbuffer_read},
 		{lightingbuffer_write},
-		[](const map<string, FG::Resource>& resources) {
+		[](const map<string, const FG::Resource*>& resources) {
 			cout << "- Lighting" << endl;
 			for (const auto& [name, rsrc] : resources) {
-				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				auto type = reinterpret_cast<const Type*>(rsrc->type);
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.ptr << endl
-					<< "    - state : " << rsrc.state << endl;
+					<< "    - ptr : " << rsrc->ptr << endl
+					<< "    - state : " << rsrc->state << endl;
 			}
 		},
 		"Lighting" };
@@ -97,33 +97,35 @@ int main() {
 	FG::Pass post{
 		{lightingbuffer_read},
 		{finaltarget_write},
-		[](const map<string, FG::Resource>& resources) {
+		[](const map<string, const FG::Resource*>& resources) {
 			cout << "- Post" << endl;
 			for (const auto& [name, rsrc] : resources) {
-				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				auto type = reinterpret_cast<const Type*>(rsrc->type);
 				cout << "  - " << name << endl
 					<< "    - width : " << type->width << endl
 					<< "    - height : " << type->height << endl
-					<< "    - ptr : " << rsrc.ptr << endl
-					<< "    - state : " << rsrc.state << endl;
+					<< "    - ptr : " << rsrc->ptr << endl
+					<< "    - state : " << rsrc->state << endl;
 			}
 		},
 		"Post" };
 
 	FG::FrameGraph fg{ new TestResourceMngr };
+	fg.Import("Final Target", { &type, reinterpret_cast<void*>(static_cast<size_t>(-1)), read });
 
 	fg.AddPass(depthpass);
 	fg.AddPass(gbufferpass);
 	fg.AddPass(lighting);
 	fg.AddPass(post);
 
-	auto rst = fg.Compile();
+	fg.Compile();
+	const auto& rst = fg.GetCompileResult();
 
-	cout << "[pass order]" << endl;
+	cout << "------------------------[pass order]------------------------" << endl;
 	for (auto i : rst.sortedPasses)
 		cout << i << ": " << fg.GetPasses().at(i).Name() << endl;
 
-	cout << "[resource info]" << endl;
+	cout << "------------------------[resource info]------------------------" << endl;
 	for (const auto& [name, info] : rst.resource2info) {
 		cout << "- " << name << endl
 			<< "   - writer: " << fg.GetPasses().at(info.writer).Name() << endl;
@@ -143,21 +145,27 @@ int main() {
 		cout << endl;
 	}
 
-	cout << "[pass graph]" << endl;
+	cout << "------------------------[pass graph]------------------------" << endl;
 	cout << "digraph {" << endl;
+	cout << "  node[style=filled fontcolor=white fontname=consolas];" << endl;
 	for (const auto& pass : fg.GetPasses())
-		cout << "  \"" << pass.Name() << "\" [shape = box];" << endl;
-	for (const auto& [name, info] : rst.resource2info)
-		cout << "  \"" << name << "\" [shape = ellipse];" << endl;
+		cout << "  \"" << pass.Name() << "\" [shape = box color=\"#F79646\"];" << endl;
+	for (const auto& [name, info] : rst.resource2info) {
+		if(fg.GetImports().find(name) != fg.GetImports().end())
+			cout << "  \"" << name << "\" [shape = ellipse color=\"#AD534D\"];" << endl;
+		else
+			cout << "  \"" << name << "\" [shape = ellipse color=\"#6597AD\"];" << endl;
+	}
 	for (const auto& pass : fg.GetPasses()) {
 		for (const auto& input : pass.Inputs())
-			cout << "  \"" << input.name << "\" -> \"" << pass.Name() << "\" [color = green];" << endl;
+			cout << "  \"" << input.name << "\" -> \"" << pass.Name()
+			<< "\" [color=\"#9BBB59\"];" << endl;
 		for (const auto& output : pass.Outputs())
-			cout << "  \"" << pass.Name() << "\" -> \"" << output.name << "\" [color = red];" << endl;
+			cout << "  \"" << pass.Name() << "\" -> \"" << output.name << "\" [color=\"#B54E4C\"];" << endl;
 	}
 	cout << "}" << endl;
 
-	cout << "[Execute]" << endl;
+	cout << "------------------------[Execute]------------------------" << endl;
 	fg.Execute();
 
 	return 0;

@@ -11,14 +11,14 @@ namespace Ubpa::FG {
 	public:
 		Pass(std::vector<ResourceDecs> inputs,
 			std::vector<ResourceDecs> outputs,
-			std::function<void(const std::map<std::string, Resource>&)> func,
+			std::function<void(const std::map<std::string, const Resource*>&)> func,
 			std::string name)
 			: inputs{ std::move(inputs) },
 			outputs{ std::move(outputs) },
 			func{ std::move(func) },
 			name{ std::move(name) }{}
 
-		void Execute(const std::map<std::string, Resource>& resources) const { func(resources); }
+		void Execute(const std::map<std::string, const Resource*>& resources) const { func(resources); }
 
 		const std::string& Name() const noexcept { return name; }
 		const std::vector<ResourceDecs>& Inputs() const noexcept { return inputs; }
@@ -27,7 +27,7 @@ namespace Ubpa::FG {
 	private:
 		std::vector<ResourceDecs> inputs;
 		std::vector<ResourceDecs> outputs;
-		std::function<void(const std::map<std::string, Resource>&)> func;
+		std::function<void(const std::map<std::string, const Resource*>&)> func;
 		std::string name;
 	};
 }
