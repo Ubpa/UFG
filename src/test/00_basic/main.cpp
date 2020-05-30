@@ -58,7 +58,46 @@ int main() {
 	fg.AddPass(lighting);
 	fg.AddPass(post);
 
-	fg.Compile();
+	auto rst = fg.Compile();
+
+	cout << "[pass order]" << endl;
+	for (auto i : rst.sortedPasses)
+		cout << i << ": " << fg.GetPasses().at(i).Name() << endl;
+
+	cout << "[resource info]" << endl;
+	for (const auto& [name, info] : rst.resource2info) {
+		cout << "- " << name << endl
+			<< "   - writer: " << fg.GetPasses().at(info.writer).Name() << endl;
+
+		if (!info.readers.empty()) {
+			cout << "   - readers" << endl;
+			for (auto reader : info.readers)
+				cout << "     - " << fg.GetPasses().at(reader).Name() << endl;
+		}
+
+		if(info.last != static_cast<size_t>(-1))
+			cout << "   - last: " << fg.GetPasses().at(info.last).Name() << endl;
+
+		cout << "  - lifetime: " << fg.GetPasses().at(info.writer).Name() << " - ";
+		if (info.last != static_cast<size_t>(-1))
+			cout << fg.GetPasses().at(info.last).Name();
+		cout << endl;
+	}
+
+	cout << "[pass graph]" << endl;
+	cout << "digraph {" << endl;
+	for (const auto& pass : fg.GetPasses())
+		cout << "  \"" << pass.Name() << "\" [shape = box];" << endl;
+	for (const auto& [name, info] : rst.resource2info)
+		cout << "  \"" << name << "\" [shape = ellipse];" << endl;
+	for (const auto& pass : fg.GetPasses()) {
+		for (const auto& input : pass.Inputs())
+			cout << "  \"" << input.name << "\" -> \"" << pass.Name() << "\" [color = green];" << endl;
+		for (const auto& output : pass.Outputs())
+			cout << "  \"" << pass.Name() << "\" -> \"" << output.name << "\" [color = red];" << endl;
+	}
+	cout << "}" << endl;
+
 
 	return 0;
 }
