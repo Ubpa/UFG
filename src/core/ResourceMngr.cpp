@@ -4,7 +4,7 @@ using namespace Ubpa;
 using namespace Ubpa::FG;
 using namespace std;
 
-Resource ResourceMngr::Request(const Resource::Type* type, string name) {
+Resource ResourceMngr::Request(const void* type, string name) {
 	auto& ptrs = frees[type];
 
 	void* ptr;

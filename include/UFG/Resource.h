@@ -5,26 +5,21 @@
 namespace Ubpa::FG {
 	class Resource {
 	public:
-		// free resource can be reused by anothor resource with same type
-		class Type {
-		public:
-			virtual ~Type() = default;
-		};
-
-		Resource(const Type* type, void* ptr, std::string name) : type{ type }, ptr{ ptr }, name{ std::move(name) } {}
+		Resource(const void* type, void* ptr, std::string name) : type{ type }, ptr{ ptr }, name{ std::move(name) } {}
 
 		const std::string& Name() const noexcept { return name; }
 		void* GetPtr() const noexcept { return ptr; }
-		const Type* GetType() const noexcept { return type; }
+		const void* GetType() const noexcept { return type; }
 
 	private:
-		const Type* type;
+		const void* type;
 		void* ptr;
 		std::string name; // globally unique 
 	};
 
 	struct ResourceDecs {
-		const Resource::Type* type;
+		// free resource can be reused by anothor resource with same type
+		const void* type;
 		std::string name;
 		size_t state;
 	};
