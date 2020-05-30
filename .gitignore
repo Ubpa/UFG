@@ -1,32 +1,16 @@
-# Prerequisites
-*.d
+# binary files
+*.png
+*.jpg
+*.bmp
+*.gif
+*.dds
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+*.pdf
 
-# Precompiled Headers
-*.gch
-*.pch
+*.mp4
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# directories
+resources/
+bin/
+lib/
+build/
