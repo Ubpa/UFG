@@ -9,6 +9,10 @@
 using namespace Ubpa::FG;
 using namespace std;
 
+FrameGraph::~FrameGraph() {
+	delete rsrcMngr;
+}
+
 const CompileResult& FrameGraph::Compile() {
 	compileResult.Clear();
 
@@ -39,9 +43,56 @@ const CompileResult& FrameGraph::Compile() {
 			continue;
 		size_t last = 0;
 		for (const auto& reader : info.readers)
-			last = std::min(last, index2order.find(reader)->second);
+			last = std::max(last, index2order.find(reader)->second);
 		info.last = last;
 	}
 
 	return compileResult;
+}
+
+void FrameGraph::Execute() {
+	map<string, Resource> resourceMap;
+	map<size_t, vector<string>> needRecycle;
+
+	for (const auto& [name, info] : compileResult.resource2info) {
+		if (info.last == static_cast<size_t>(-1))
+			continue;
+
+		needRecycle[info.last].push_back(name);
+	}
+
+	for (auto i : compileResult.sortedPasses) {
+		const auto& pass = passes[i];
+
+		for (auto input : pass.Inputs()) {
+			auto target = resourceMap.find(input.name);
+			if (target == resourceMap.end())
+				resourceMap[input.name] = rsrcMngr->Request(input.type, input.state);
+			else {
+				auto& resource = target->second;
+				if (resource.state != input.state)
+					rsrcMngr->Transition(resource, input.state);
+			}
+		}
+		for (auto output : pass.Outputs()) {
+			auto target = resourceMap.find(output.name);
+			if (target == resourceMap.end())
+				resourceMap[output.name] = rsrcMngr->Request(output.type, output.state);
+			else {
+				auto& resource = target->second;
+				if (resource.state != output.state)
+					rsrcMngr->Transition(resource, output.state);
+			}
+		}
+
+		pass.Execute(resourceMap);
+
+		auto target = needRecycle.find(i);
+		if (target != needRecycle.end()) {
+			for (const auto& name : target->second) {
+				rsrcMngr->Recycle(resourceMap[name]);
+				resourceMap.erase(name);
+			}
+		}
+	}
 }

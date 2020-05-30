@@ -10,6 +10,23 @@ struct Type {
 	size_t height;
 };
 
+class TestResourceMngr : public FG::ResourceMngr {
+public:
+	virtual void Transition(FG::Resource& resource, size_t state) override {
+		cout << "[Transition] " << resource.ptr << ": " << resource.state << "->" << state << endl;
+		resource.state = state;
+	}
+protected:
+	virtual void* Create(const void* type, size_t state) const override {
+		static size_t num = 0;
+		cout << "[Create] " << num << endl;
+		return reinterpret_cast<void*>(num++);
+	}
+	virtual void Init(const void* type, void* ptr, size_t state) const override {
+		cout << "[Init] " << ptr << ": " << state << endl;
+	}
+};
+
 int main() {
 	Type type{ 1024,768 };
 	size_t write = 0;
@@ -31,25 +48,64 @@ int main() {
 	FG::Pass depthpass{
 		{},
 		{depthbuffer_write},
-		[]() {cout << "Depth pass" << endl; },
+		[](const map<string, FG::Resource>& resources) {
+			cout << "- Depth pass" << endl;
+			for (const auto& [name, rsrc] : resources) {
+				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				cout << "  - " << name << endl
+					<< "    - width : " << type->width << endl
+					<< "    - height : " << type->height << endl
+					<< "    - ptr : " << rsrc.type << endl;
+			}
+		},
 		"Depth pass" };
+
 	FG::Pass gbufferpass{
 		{depthbuffer_read},
 		{gbuffer1_write, gbuffer2_write, gbuffer3_write},
-		[]() {cout << "GBuffer pass" << endl; },
+		[](const map<string, FG::Resource>& resources) {
+			cout << "- GBuffer pass" << endl;
+			for (const auto& [name, rsrc] : resources) {
+				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				cout << "  - " << name << endl
+					<< "    - width : " << type->width << endl
+					<< "    - height : " << type->height << endl
+					<< "    - ptr : " << rsrc.ptr << endl;
+			}
+		},
 		"GBuffer pass" };
+
 	FG::Pass lighting{
 		{gbuffer1_read, gbuffer2_read, gbuffer3_read, depthbuffer_read},
 		{lightingbuffer_write},
-		[]() {cout << "Lighting" << endl; },
+		[](const map<string, FG::Resource>& resources) {
+			cout << "- Lighting" << endl;
+			for (const auto& [name, rsrc] : resources) {
+				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				cout << "  - " << name << endl
+					<< "    - width : " << type->width << endl
+					<< "    - height : " << type->height << endl
+					<< "    - ptr : " << rsrc.ptr << endl;
+			}
+		},
 		"Lighting" };
+
 	FG::Pass post{
 		{lightingbuffer_read},
 		{finaltarget_write},
-		[]() {cout << "Post" << endl; },
+		[](const map<string, FG::Resource>& resources) {
+			cout << "- Post" << endl;
+			for (const auto& [name, rsrc] : resources) {
+				auto type = reinterpret_cast<const Type*>(rsrc.type);
+				cout << "  - " << name << endl
+					<< "    - width : " << type->width << endl
+					<< "    - height : " << type->height << endl
+					<< "    - ptr : " << rsrc.ptr << endl;
+			}
+		},
 		"Post" };
 
-	FG::FrameGraph fg;
+	FG::FrameGraph fg{ new TestResourceMngr };
 
 	fg.AddPass(depthpass);
 	fg.AddPass(gbufferpass);
@@ -96,6 +152,8 @@ int main() {
 	}
 	cout << "}" << endl;
 
+	cout << "[Execute]" << endl;
+	fg.Execute();
 
 	return 0;
 }
