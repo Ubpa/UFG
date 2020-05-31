@@ -4,22 +4,28 @@ using namespace Ubpa;
 using namespace Ubpa::FG;
 using namespace std;
 
-Resource ResourceMngr::Request(const void* type, size_t state) {
-	auto& ptrs = frees[type];
+Resource ResourceMngr::Request(const void* raw_type, size_t raw_state, const void* impl_type) {
+	auto& tuples = frees[raw_type];
 
-	void* ptr;
+	void* ptr_raw;
+	size_t raw_orig_state;
 
-	if (ptrs.empty())
-		ptr = Create(type, state);
-	else {
-		ptr = ptrs.back();
-		ptrs.pop_back();
-		Init(type, ptr, state);
+	if (tuples.empty()) {
+		ptr_raw = CreateRaw(raw_type, raw_state);
+		raw_orig_state = raw_state;
 	}
+	else
+		tie(ptr_raw, raw_orig_state) = tuples.back();
 
-	return { type, ptr, state };
+	void* ptr_impl = RequestImpl(ptr_raw, impl_type);
+	Resource rsrc{ ptr_raw, ptr_impl };
+
+	if (raw_orig_state != raw_state)
+		Transition(ptr_raw, raw_orig_state, raw_state);
+
+	return rsrc;
 }
 
-void ResourceMngr::Recycle(const Resource& resource) {
-	frees[resource.type].push_back(resource.ptr);
+void ResourceMngr::Recycle(const void* raw_type, void* ptr_raw, size_t raw_state) {
+	frees[raw_type].emplace_back(ptr_raw, raw_state);
 }

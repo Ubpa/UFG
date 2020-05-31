@@ -4,14 +4,28 @@
 
 namespace Ubpa::FG {
 	struct Resource {
-		const void* type; // free resource can be reused by anothor resource with same type
-		void* ptr; // pointer to real resource
-		size_t state; // e.g. D3D12_RESOURCE_STATES
+		void* raw_ptr; // pointer to raw resource
+		void* impl_ptr; // pointer to impl resource
 	};
 
-	struct ResourceDecs {
-		const void* type;
+	struct ResourceRawDesc {
+		const void* raw_type; // e.g. D3D_RESOURCE_DESC
+	};
+
+	struct ResourceImplDesc {
+		const void* impl_type; // e.g. D3D12_SHADER_RESOURCE_VIEW_DESC / D3D12_RENDER_TARGET_VIEW_DESC
+		size_t raw_state; // e.g. D3D12_SHADER_RESOURCE_VIEW_DESC / D3D12_RENDER_TARGET_VIEW_DESC
+	};
+
+	struct ResourceImportView {
+		void* raw_ptr; // pointer to raw resource
+		size_t raw_init_state; // e.g. D3D12_RESOURCE_STATES
+	};
+
+	template<typename T>
+	struct Named : T {
 		std::string name;
-		size_t state; // e.g. D3D12_RESOURCE_STATES
+		T& DeNamed() noexcept { return *this; }
+		const T& DeNamed() const noexcept { return *this; }
 	};
 }

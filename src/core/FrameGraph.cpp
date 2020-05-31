@@ -53,7 +53,12 @@ void FrameGraph::Compile() {
 }
 
 void FrameGraph::Execute() {
-	map<string, Resource> resourceMap;
+	struct StatedRsrc {
+		Resource rsrc;
+		size_t raw_state;
+		const void* impl_type;
+	};
+	map<string, StatedRsrc> srsrcMap;
 	map<size_t, vector<string>> needRecycle;
 
 	for (const auto& [name, info] : compileResult.resource2info) {
@@ -66,24 +71,33 @@ void FrameGraph::Execute() {
 	for (auto i : compileResult.sortedPasses) {
 		const auto& pass = passes[i];
 		
-		map<string, const Resource*> passResources;
+		map<string, Resource> passResources;
 
-		auto findRsrc = [&](ResourceDecs decs) -> Resource* {
-			Resource* rsrc;
-			auto target = resourceMap.find(decs.name);
-			if (target == resourceMap.end()) {
-				rsrc = &resourceMap[decs.name];
-				auto import_target = imports.find(decs.name);
-				if (import_target != imports.end())
-					*rsrc = import_target->second;
+		auto findRsrc = [&](const Named<ResourceImplDesc>& desc) -> Resource {
+			Resource rsrc;
+			auto target = srsrcMap.find(desc.name);
+			if (target == srsrcMap.end()) {
+				auto import_target = imports.find(desc.name);
+				if (import_target != imports.end()) {
+					rsrc.raw_ptr = import_target->second.raw_ptr;
+					rsrc.impl_ptr = rsrcMngr->RequestImpl(rsrc.raw_ptr, desc.impl_type);
+				}
 				else
-					*rsrc = rsrcMngr->Request(decs.type, decs.state);
+					rsrc = rsrcMngr->Request(GetResourceRawDesc(desc.name).raw_type, desc.raw_state, desc.impl_type);
+				srsrcMap[desc.name] = { rsrc, desc.raw_state, desc.impl_type };
 			}
-			else
-				rsrc = &target->second;
-
-			if (rsrc->state != decs.state)
-				rsrcMngr->Transition(rsrc, decs.state);
+			else {
+				auto& srsrc = target->second;
+				if (srsrc.raw_state != desc.raw_state) {
+					rsrcMngr->Transition(srsrc.rsrc.raw_ptr, srsrc.raw_state, desc.raw_state);
+					srsrc.raw_state = desc.raw_state;
+				}
+				if (srsrc.impl_type != desc.impl_type) {
+					rsrcMngr->RequestImpl(srsrc.rsrc.raw_ptr, desc.impl_type);
+					srsrc.impl_type = desc.impl_type;
+				}
+				rsrc = srsrc.rsrc;
+			}
 
 			return rsrc;
 		};
@@ -98,11 +112,16 @@ void FrameGraph::Execute() {
 		auto target = needRecycle.find(i);
 		if (target != needRecycle.end()) {
 			for (const auto& name : target->second) {
-				rsrcMngr->Recycle(resourceMap[name]);
-				resourceMap.erase(name);
+				const auto& srsrc = srsrcMap[name];
+				rsrcMngr->Recycle(GetResourceRawDesc(name).raw_type, srsrc.rsrc.raw_ptr, srsrc.raw_state);
+				srsrcMap.erase(name);
 			}
 		}
 	}
+
+	// restore state
+	for (const auto& [name, view] : imports)
+		rsrcMngr->Transition(view.raw_ptr, srsrcMap[name].raw_state, view.raw_init_state);
 }
 
 void FrameGraph::Clear() {

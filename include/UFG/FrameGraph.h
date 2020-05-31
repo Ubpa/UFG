@@ -14,9 +14,16 @@ namespace Ubpa::FG {
 		ResourceMngr* GetResourceMngr() const noexcept { return rsrcMngr; }
 		const std::vector<Pass>& GetPasses() const noexcept { return passes; }
 		const CompileResult& GetCompileResult() const noexcept { return compileResult; }
-		const std::map<std::string, Resource>& GetImports() const noexcept { return imports; }
+		const std::map<std::string, ResourceImportView>& GetImports() const noexcept { return imports; }
+		const ResourceRawDesc& GetResourceRawDesc(const std::string& name) const noexcept {
+			return rsrcRawDescs.find(name)->second;
+		}
 
-		void Import(std::string name, Resource resource) { imports.emplace(std::move(name), resource); }
+		void ImportResource(Named<ResourceImportView> rsrc) { imports.emplace(std::move(rsrc.name), rsrc.DeNamed()); }
+
+		void AddResource(Named<ResourceRawDesc> rsrc) {
+			rsrcRawDescs[rsrc.name] = rsrc.DeNamed();
+		}
 
 		void AddPass(Pass pass) { passes.emplace_back(std::move(pass)); }
 		void Compile();
@@ -29,6 +36,7 @@ namespace Ubpa::FG {
 		ResourceMngr* rsrcMngr;
 		CompileResult compileResult;
 		std::vector<Pass> passes;
-		std::map<std::string, Resource> imports;
+		std::map<std::string, ResourceImportView> imports;
+		std::map<std::string, ResourceRawDesc> rsrcRawDescs;
 	};
 }

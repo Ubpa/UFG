@@ -8,13 +8,19 @@
 namespace Ubpa::FG {
 	class ResourceMngr {
 	public:
-		Resource Request(const void* type, size_t state);
-		void Recycle(const Resource& resource);
-		virtual void Transition(Resource* resource, size_t state) = 0;
+		Resource Request(const void* raw_type, size_t raw_state, const void* impl_type);
+		void Recycle(const void* raw_type, void* ptr_raw, size_t raw_state);
+
+		virtual void Transition(void* ptr_raw, size_t from, size_t to) = 0;
+
+		// return ptr_impl
+		virtual void* RequestImpl(void* ptr_raw, const void* impl_type) = 0;
 	protected:
-		virtual void* Create(const void* type, size_t state) const = 0;
-		virtual void Init(const void* type, void* ptr, size_t state) const = 0;
+		// return ptr_raw
+		virtual void* CreateRaw(const void* raw_type, size_t raw_state) = 0;
+		
 	private:
-		std::unordered_map<const void*, std::vector<void*>> frees;
+		// raw_type -> (ptr_raw, raw_state)
+		std::unordered_map<const void*, std::vector<std::tuple<void*, size_t>>> frees;
 	};
 }
