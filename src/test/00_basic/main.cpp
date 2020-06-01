@@ -27,12 +27,12 @@ public:
 		for (auto i : crst.sortedPasses) {
 			const auto& passinfo = crst.idx2info.find(i)->second;
 			for (const auto& rsrc : passinfo.constructRsrcs)
-				rsrcMngr.Construct(fg.GetResourceNode(rsrc).Name());
+				rsrcMngr.Construct(fg.GetResourceNodes().at(rsrc).Name());
 
 			cout << "[Execute] " << passnodes[i].Name() << endl;
 
 			for (const auto& rsrc : passinfo.destructRsrcs)
-				rsrcMngr.Destruct(fg.GetResourceNode(rsrc).Name());
+				rsrcMngr.Destruct(fg.GetResourceNodes().at(rsrc).Name());
 		}
 	}
 };
@@ -94,7 +94,7 @@ int main() {
 
 	cout << "------------------------[resource info]------------------------" << endl;
 	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "- " << fg.GetResourceNode(idx).Name() << endl
+		cout << "- " << fg.GetResourceNodes().at(idx).Name() << endl
 			<< "   - writer: " << fg.GetPassNodes().at(info.writer).Name() << endl;
 
 		if (!info.readers.empty()) {
@@ -118,13 +118,13 @@ int main() {
 	for (const auto& pass : fg.GetPassNodes())
 		cout << "  \"" << pass.Name() << "\" [shape = box color=\"#F79646\"];" << endl;
 	for (const auto& [idx, info] : crst.rsrc2info)
-		cout << "  \"" << fg.GetResourceNode(idx).Name() << "\" [shape = ellipse color=\"#6597AD\"];" << endl;
+		cout << "  \"" << fg.GetResourceNodes().at(idx).Name() << "\" [shape = ellipse color=\"#6597AD\"];" << endl;
 	for (const auto& pass : fg.GetPassNodes()) {
 		for (const auto& input : pass.Inputs())
-			cout << "  \"" << fg.GetResourceNode(input).Name() << "\" -> \"" << pass.Name()
+			cout << "  \"" << fg.GetResourceNodes().at(input).Name() << "\" -> \"" << pass.Name()
 			<< "\" [color=\"#9BBB59\"];" << endl;
 		for (const auto& output : pass.Outputs())
-			cout << "  \"" << pass.Name() << "\" -> \"" << fg.GetResourceNode(output).Name() << "\" [color=\"#B54E4C\"];" << endl;
+			cout << "  \"" << pass.Name() << "\" -> \"" << fg.GetResourceNodes().at(output).Name() << "\" [color=\"#B54E4C\"];" << endl;
 	}
 	cout << "}" << endl;
 
