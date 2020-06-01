@@ -19,8 +19,8 @@ namespace Ubpa::FG {
 			};
 
 			struct PassInfo {
-				std::vector<std::string> constructRsrcs;
-				std::vector<std::string> destructRsrcs;
+				std::vector<size_t> constructRsrcs;
+				std::vector<size_t> destructRsrcs;
 			};
 
 			struct PassGraph {
@@ -29,7 +29,7 @@ namespace Ubpa::FG {
 				std::unordered_map<size_t, std::set<size_t>> adjList;
 			};
 
-			std::unordered_map<std::string, RsrcInfo> rsrc2info;
+			std::unordered_map<size_t, RsrcInfo> rsrc2info;
 			PassGraph passgraph;
 			std::vector<size_t> sortedPasses;
 			std::unordered_map<size_t, PassInfo> idx2info; // pass index to pass info

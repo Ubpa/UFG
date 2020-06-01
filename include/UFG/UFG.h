@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ResourceNode.h"
 #include "Compiler.h"
 #include "FrameGraph.h"
-#include "Pass.h"
+#include "PassNode.h"

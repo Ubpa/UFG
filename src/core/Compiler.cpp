@@ -1,5 +1,7 @@
 #include <UFG/Compiler.h>
 
+#include <UFG/ResourceNode.h>
+
 #include <algorithm>
 #include <stack>
 
@@ -50,7 +52,7 @@ tuple<bool, vector<size_t>> Compiler::Result::PassGraph::TopoSort() const {
 
 tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	Result rst;
-	const auto& passes = fg.GetPasses();
+	const auto& passes = fg.GetPassNodes();
 
 	for (size_t i = 0; i < passes.size(); i++) {
 		const auto& pass = passes[i];

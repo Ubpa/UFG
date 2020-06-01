@@ -10,6 +10,7 @@ public:
 	void Construct(const std::string& resource_name) {
 		cout << "[Construct] " << resource_name << endl;
 	}
+
 	void Destruct(const std::string& resource_name) {
 		cout << "[Destruct] " << resource_name << endl;
 	}
@@ -22,58 +23,66 @@ public:
 		const FG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
-		const auto& passes = fg.GetPasses();
+		const auto& passnodes = fg.GetPassNodes();
 		for (auto i : crst.sortedPasses) {
 			const auto& passinfo = crst.idx2info.find(i)->second;
 			for (const auto& rsrc : passinfo.constructRsrcs)
-				rsrcMngr.Construct(rsrc);
+				rsrcMngr.Construct(fg.GetResourceNode(rsrc).Name());
 
-			cout << "[Execute] " << passes[i].Name() << endl;
+			cout << "[Execute] " << passnodes[i].Name() << endl;
 
 			for (const auto& rsrc : passinfo.destructRsrcs)
-				rsrcMngr.Destruct(rsrc);
+				rsrcMngr.Destruct(fg.GetResourceNode(rsrc).Name());
 		}
 	}
 };
 
 int main() {
-	FG::Pass depth{
-		"Depth pass",
-		{},
-		{"Depth Buffer"}
-	};
-
-	FG::Pass gbuffer{
-		"GBuffer pass",
-		{"Depth Buffer"},
-		{"GBuffer1", "GBuffer2", "GBuffer3"}
-	};
-
-	FG::Pass lighting{
-		"Lighting",
-		{"GBuffer1", "GBuffer2", "GBuffer3"},
-		{"Lighting Buffer"}
-	};
-
-	FG::Pass post{
-		"Post",
-		{"Lighting Buffer"},
-		{"Final Target"}
-	};
-
-	FG::Pass debug{
-		"Debug View",
-		{"GBuffer3"},
-		{"Debug Output"}
-	};
-
 	FG::FrameGraph fg;
 
-	fg.AddPass(depth);
-	fg.AddPass(gbuffer);
-	fg.AddPass(lighting);
-	fg.AddPass(post);
-	fg.AddPass(debug);
+	size_t depthbuffer = fg.AddResourceNode("Depth Buffer");
+	size_t gbuffer1 = fg.AddResourceNode("GBuffer1");
+	size_t gbuffer2 = fg.AddResourceNode("GBuffer2");
+	size_t gbuffer3 = fg.AddResourceNode("GBuffer3");
+	size_t lightingbuffer = fg.AddResourceNode("Lighting Buffer");
+	size_t finaltarget = fg.AddResourceNode("Final Target");
+	size_t debugoutput = fg.AddResourceNode("Debug Output");
+
+	FG::PassNode depth{
+		"Depth pass",
+		{},
+		{depthbuffer}
+	};
+
+	FG::PassNode gbuffer{
+		"GBuffer pass",
+		{depthbuffer},
+		{gbuffer1,gbuffer2,gbuffer3}
+	};
+
+	FG::PassNode lighting{
+		"Lighting",
+		{gbuffer1,gbuffer2,gbuffer3},
+		{lightingbuffer}
+	};
+
+	FG::PassNode post{
+		"Post",
+		{lightingbuffer},
+		{finaltarget}
+	};
+
+	FG::PassNode debug{
+		"Debug View",
+		{gbuffer3},
+		{debugoutput}
+	};
+
+	fg.AddPassNode(depth);
+	fg.AddPassNode(gbuffer);
+	fg.AddPassNode(lighting);
+	fg.AddPassNode(post);
+	fg.AddPassNode(debug);
 
 	FG::Compiler compiler;
 
@@ -81,45 +90,41 @@ int main() {
 	
 	cout << "------------------------[pass order]------------------------" << endl;
 	for (auto i : crst.sortedPasses)
-		cout << i << ": " << fg.GetPasses().at(i).Name() << endl;
+		cout << i << ": " << fg.GetPassNodes().at(i).Name() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [name, info] : crst.rsrc2info) {
-		cout << "- " << name << endl
-			<< "   - writer: " << fg.GetPasses().at(info.writer).Name() << endl;
+	for (const auto& [idx, info] : crst.rsrc2info) {
+		cout << "- " << fg.GetResourceNode(idx).Name() << endl
+			<< "   - writer: " << fg.GetPassNodes().at(info.writer).Name() << endl;
 
 		if (!info.readers.empty()) {
 			cout << "   - readers" << endl;
 			for (auto reader : info.readers)
-				cout << "     - " << fg.GetPasses().at(reader).Name() << endl;
+				cout << "     - " << fg.GetPassNodes().at(reader).Name() << endl;
 		}
 
 		if (info.last != static_cast<size_t>(-1))
-			cout << "   - last: " << fg.GetPasses().at(info.last).Name() << endl;
+			cout << "   - last: " << fg.GetPassNodes().at(info.last).Name() << endl;
 
-		cout << "  - lifetime: " << fg.GetPasses().at(info.writer).Name() << " - ";
+		cout << "  - lifetime: " << fg.GetPassNodes().at(info.writer).Name() << " - ";
 		if (info.last != static_cast<size_t>(-1))
-			cout << fg.GetPasses().at(info.last).Name();
+			cout << fg.GetPassNodes().at(info.last).Name();
 		cout << endl;
 	}
 
 	cout << "------------------------[pass graph]------------------------" << endl;
 	cout << "digraph {" << endl;
 	cout << "  node[style=filled fontcolor=white fontname=consolas];" << endl;
-	for (const auto& pass : fg.GetPasses())
+	for (const auto& pass : fg.GetPassNodes())
 		cout << "  \"" << pass.Name() << "\" [shape = box color=\"#F79646\"];" << endl;
-	for (const auto& [name, info] : crst.rsrc2info) {
-		/*if (fg.GetImports().find(name) != fg.GetImports().end())
-			cout << "  \"" << name << "\" [shape = ellipse color=\"#AD534D\"];" << endl;
-		else*/
-			cout << "  \"" << name << "\" [shape = ellipse color=\"#6597AD\"];" << endl;
-	}
-	for (const auto& pass : fg.GetPasses()) {
+	for (const auto& [idx, info] : crst.rsrc2info)
+		cout << "  \"" << fg.GetResourceNode(idx).Name() << "\" [shape = ellipse color=\"#6597AD\"];" << endl;
+	for (const auto& pass : fg.GetPassNodes()) {
 		for (const auto& input : pass.Inputs())
-			cout << "  \"" << input << "\" -> \"" << pass.Name()
+			cout << "  \"" << fg.GetResourceNode(input).Name() << "\" -> \"" << pass.Name()
 			<< "\" [color=\"#9BBB59\"];" << endl;
 		for (const auto& output : pass.Outputs())
-			cout << "  \"" << pass.Name() << "\" -> \"" << output << "\" [color=\"#B54E4C\"];" << endl;
+			cout << "  \"" << pass.Name() << "\" -> \"" << fg.GetResourceNode(output).Name() << "\" [color=\"#B54E4C\"];" << endl;
 	}
 	cout << "}" << endl;
 
