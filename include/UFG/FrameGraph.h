@@ -50,6 +50,13 @@ namespace Ubpa::FG {
 		const std::vector<PassNode>& GetPassNodes() const noexcept { return passNodes; }
 		const std::vector<ResourceNode>& GetResourceNodes() const noexcept { return rsrcNodes; }
 
+		void Clear() {
+			rsrcname2idx.clear();
+			passnodename2idx.clear();
+			rsrcNodes.clear();
+			passNodes.clear();
+		}
+
 	private:
 		std::unordered_map<std::string, size_t> rsrcname2idx;
 		std::unordered_map<std::string, size_t> passnodename2idx;
