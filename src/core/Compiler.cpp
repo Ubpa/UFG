@@ -68,28 +68,31 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 			adj.insert(reader);
 	}
 
+	// sortedPasses : order 2 index
 	auto [success, sortedPasses] = rst.passgraph.TopoSort();
 	if (!success)
 		return { false,{} };
 
-	rst.sortedPasses = move(sortedPasses);
+	vector<size_t> index2order(sortedPasses.size());
+	for (size_t i = 0; i < sortedPasses.size(); i++)
+		index2order[sortedPasses[i]] = i;
 
-	unordered_map<size_t, size_t> index2order;
-	for (size_t i = 0; i < rst.sortedPasses.size(); i++)
-		index2order.emplace(rst.sortedPasses[i], i);
-	for (auto& [name, info] : rst.rsrc2info) {
+	for (auto& [rsrcNodeIdx, info] : rst.rsrc2info) {
+		info.first = index2order[info.writer];
+
 		if (!info.readers.empty()) {
 			size_t last = 0;
 			for (const auto& reader : info.readers)
-				last = max(last, index2order.find(reader)->second);
+				last = max(last, index2order[reader]);
 			info.last = last;
 		}
 		else
-			info.last = info.writer;
+			info.last = info.first;
 
-		rst.idx2info[info.writer].constructRsrcs.push_back(name);
-		rst.idx2info[info.last].destructRsrcs.push_back(name);
+		rst.idx2info[info.writer].constructRsrcs.push_back(rsrcNodeIdx);
+		rst.idx2info[sortedPasses[info.last]].destructRsrcs.push_back(rsrcNodeIdx);
 	}
 
+	rst.sortedPasses = move(sortedPasses);
 	return { true, rst };
 }

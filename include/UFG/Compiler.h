@@ -10,8 +10,7 @@ namespace Ubpa::FG {
 	public:
 		struct Result {
 			struct RsrcInfo {
-				// first == writer
-				// size_t first; // index in sortedPass
+				size_t first; // index in sortedPass
 				size_t last; // index in sortedPass
 
 				std::vector<size_t> readers;
