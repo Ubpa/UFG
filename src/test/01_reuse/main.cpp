@@ -185,21 +185,10 @@ int main() {
 		cout << endl;
 	}
 
-	cout << "------------------------[pass graph]------------------------" << endl;
-	cout << "digraph {" << endl;
-	cout << "  node[style=filled fontcolor=white fontname=consolas];" << endl;
-	for (const auto& pass : fg.GetPassNodes())
-		cout << "  \"" << pass.Name() << "\" [shape = box color=\"#F79646\"];" << endl;
-	for (const auto& [idx, info] : crst.rsrc2info)
-		cout << "  \"" << fg.GetResourceNodes().at(idx).Name() << "\" [shape = ellipse color=\"#6597AD\"];" << endl;
-	for (const auto& pass : fg.GetPassNodes()) {
-		for (const auto& input : pass.Inputs())
-			cout << "  \"" << fg.GetResourceNodes().at(input).Name() << "\" -> \"" << pass.Name()
-			<< "\" [color=\"#9BBB59\"];" << endl;
-		for (const auto& output : pass.Outputs())
-			cout << "  \"" << pass.Name() << "\" -> \"" << fg.GetResourceNodes().at(output).Name() << "\" [color=\"#B54E4C\"];" << endl;
-	}
-	cout << "}" << endl;
+	cout << "------------------------[Graphviz]------------------------" << endl;
+
+	auto g = fg.ToGraphvizGraph();
+	cout << g.Dump() << endl;
 
 	cout << "------------------------[Execute]------------------------" << endl;
 
