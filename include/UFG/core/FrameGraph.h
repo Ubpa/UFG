@@ -29,6 +29,7 @@ namespace Ubpa::FG {
 
 		size_t GetResourceNodeIndex(const std::string& name) const noexcept { return rsrcname2idx.find(name)->second; }
 		size_t GetPassNodeIndex(const std::string& name) const noexcept { return passnodename2idx.find(name)->second; }
+
 		const std::vector<PassNode>& GetPassNodes() const noexcept { return passNodes; }
 		const std::vector<ResourceNode>& GetResourceNodes() const noexcept { return rsrcNodes; }
 

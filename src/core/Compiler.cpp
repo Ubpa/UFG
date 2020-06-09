@@ -1,6 +1,6 @@
-#include <UFG/Compiler.h>
+#include <UFG/core/Compiler.h>
 
-#include <UFG/ResourceNode.h>
+#include <UFG/core/ResourceNode.h>
 
 #include <algorithm>
 #include <stack>

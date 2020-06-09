@@ -1,6 +1,6 @@
 Ubpa_AddTarget(
   MODE STATIC
-  SOURCE "${PROJECT_SOURCE_DIR}/include/UFG" 
+  SOURCE "${PROJECT_SOURCE_DIR}/include/UFG/core" 
   INC include
   LIB
     Ubpa::UGraphviz_core

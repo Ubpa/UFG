@@ -1,4 +1,4 @@
-#include <UFG/FrameGraph.h>
+#include <UFG/core/FrameGraph.h>
 
 using namespace Ubpa;
 
