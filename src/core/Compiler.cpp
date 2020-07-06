@@ -63,6 +63,9 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	}
 
 	for (const auto& [name, info] : rst.rsrc2info) {
+		if (info.writer == static_cast<size_t>(-1) && info.readers.size() == 0)
+			return { false, {} };
+
 		auto& adj = rst.passgraph.adjList[info.writer];
 		for (const auto& reader : info.readers)
 			adj.insert(reader);
@@ -78,18 +81,26 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 		index2order[sortedPasses[i]] = i;
 
 	for (auto& [rsrcNodeIdx, info] : rst.rsrc2info) {
-		info.first = index2order[info.writer];
+		if (info.writer != static_cast<size_t>(-1))
+			info.first = index2order[info.writer];
+		else {
+			size_t first = rst.rsrc2info.size();
+			for (const auto& reader : info.readers)
+				first = min(first, index2order[reader]);
+			info.first = first;
+		}
 
 		if (!info.readers.empty()) {
 			size_t last = 0;
 			for (const auto& reader : info.readers)
 				last = max(last, index2order[reader]);
+			
 			info.last = last;
 		}
 		else
 			info.last = info.first;
 
-		rst.idx2info[info.writer].constructRsrcs.push_back(rsrcNodeIdx);
+		rst.idx2info[info.first].constructRsrcs.push_back(rsrcNodeIdx);
 		rst.idx2info[sortedPasses[info.last]].destructRsrcs.push_back(rsrcNodeIdx);
 	}
 

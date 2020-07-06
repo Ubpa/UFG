@@ -10,11 +10,11 @@ namespace Ubpa::FG {
 	public:
 		struct Result {
 			struct RsrcInfo {
-				size_t first; // index in sortedPass
-				size_t last; // index in sortedPass
+				size_t first{ static_cast<size_t>(-1) }; // index in sortedPass
+				size_t last{ static_cast<size_t>(-1) }; // index in sortedPass
 
 				std::vector<size_t> readers;
-				size_t writer;
+				size_t writer{ static_cast<size_t>(-1) };
 			};
 
 			struct PassInfo {
