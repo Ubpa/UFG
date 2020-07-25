@@ -6,8 +6,7 @@
 #include <unordered_map>
 #include <functional>
 
-
-namespace Ubpa::detail::DX12::FG::Rsrc_ {
+namespace Ubpa::UFG::DX12::detail {
 	template<typename T>
 	void hash_combine(size_t& s, const T& v) {
 		std::hash<T> h;
@@ -64,19 +63,19 @@ namespace Ubpa::detail::DX12::FG::Rsrc_ {
 	}
 }
 
-namespace Ubpa::DX12::FG {
+namespace Ubpa::UFG::DX12 {
 	using Rsrc = ID3D12Resource;
-	using RsrcPtr = ComPtr<Rsrc>;
+	using RsrcPtr = UDX12::ComPtr<Rsrc>;
 	using RsrcState = D3D12_RESOURCE_STATES;
 	struct RsrcType {
 		D3D12_CLEAR_VALUE clearValue;
 		D3D12_RESOURCE_DESC desc;
-		bool operator==(const Ubpa::DX12::FG::RsrcType& rhs) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::bitwise_equal(*this, rhs);
+		bool operator==(const RsrcType& rhs) const noexcept {
+			return detail::bitwise_equal(*this, rhs);
 		}
 
 		static RsrcType RT2D(DXGI_FORMAT format, UINT64 width, UINT height, const float* color){
-			return { CD3DX12_CLEAR_VALUE{ format,color }, Ubpa::DX12::Desc::RSRC::RT2D(width, height, format) };
+			return { CD3DX12_CLEAR_VALUE{ format,color }, Ubpa::UDX12::Desc::RSRC::RT2D(width, height, format) };
 		}
 	};
 	struct RsrcImplDesc_SRV_NULL {};
@@ -106,65 +105,65 @@ namespace Ubpa::DX12::FG {
 }
 
 inline bool operator==(const D3D12_CONSTANT_BUFFER_VIEW_DESC& lhs, const D3D12_CONSTANT_BUFFER_VIEW_DESC& rhs) noexcept {
-	return Ubpa::detail::DX12::FG::Rsrc_::bitwise_equal(lhs, rhs);
+	return Ubpa::UFG::DX12::detail::bitwise_equal(lhs, rhs);
 }
 
 inline bool operator==(const D3D12_SHADER_RESOURCE_VIEW_DESC& lhs, const D3D12_SHADER_RESOURCE_VIEW_DESC& rhs) noexcept {
-	return Ubpa::detail::DX12::FG::Rsrc_::bitwise_equal(lhs, rhs);
+	return Ubpa::UFG::DX12::detail::bitwise_equal(lhs, rhs);
 }
 
 inline bool operator==(const D3D12_UNORDERED_ACCESS_VIEW_DESC& lhs, const D3D12_UNORDERED_ACCESS_VIEW_DESC& rhs) noexcept {
-	return Ubpa::detail::DX12::FG::Rsrc_::bitwise_equal(lhs, rhs);
+	return Ubpa::UFG::DX12::detail::bitwise_equal(lhs, rhs);
 }
 
 inline bool operator==(const D3D12_RENDER_TARGET_VIEW_DESC& lhs, const D3D12_RENDER_TARGET_VIEW_DESC& rhs) noexcept {
-	return Ubpa::detail::DX12::FG::Rsrc_::bitwise_equal(lhs, rhs);
+	return Ubpa::UFG::DX12::detail::bitwise_equal(lhs, rhs);
 }
 
 inline bool operator==(const D3D12_DEPTH_STENCIL_VIEW_DESC& lhs, const D3D12_DEPTH_STENCIL_VIEW_DESC& rhs) noexcept {
-	return Ubpa::detail::DX12::FG::Rsrc_::bitwise_equal(lhs, rhs);
+	return Ubpa::UFG::DX12::detail::bitwise_equal(lhs, rhs);
 }
 
 namespace std {
 	template<>
-	struct hash<Ubpa::DX12::FG::RsrcType> {
-		size_t operator()(const Ubpa::DX12::FG::RsrcType& type) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::hash_of(type);
+	struct hash<Ubpa::UFG::DX12::RsrcType> {
+		size_t operator()(const Ubpa::UFG::DX12::RsrcType& type) const noexcept {
+			return Ubpa::UFG::DX12::detail::hash_of(type);
 		}
 	};
 
 	template<>
 	struct hash<D3D12_CONSTANT_BUFFER_VIEW_DESC> {
 		size_t operator()(const D3D12_CONSTANT_BUFFER_VIEW_DESC& desc) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::hash_of(desc);
+			return Ubpa::UFG::DX12::detail::hash_of(desc);
 		}
 	};
 
 	template<>
 	struct hash<D3D12_SHADER_RESOURCE_VIEW_DESC> {
 		size_t operator()(const D3D12_SHADER_RESOURCE_VIEW_DESC& desc) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::hash_of(desc);
+			return Ubpa::UFG::DX12::detail::hash_of(desc);
 		}
 	};
 
 	template<>
 	struct hash<D3D12_UNORDERED_ACCESS_VIEW_DESC> {
 		size_t operator()(const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::hash_of(desc);
+			return Ubpa::UFG::DX12::detail::hash_of(desc);
 		}
 	};
 
 	template<>
 	struct hash<D3D12_RENDER_TARGET_VIEW_DESC> {
 		size_t operator()(const D3D12_RENDER_TARGET_VIEW_DESC& desc) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::hash_of(desc);
+			return Ubpa::UFG::DX12::detail::hash_of(desc);
 		}
 	};
 
 	template<>
 	struct hash<D3D12_DEPTH_STENCIL_VIEW_DESC> {
 		size_t operator()(const D3D12_DEPTH_STENCIL_VIEW_DESC& desc) const noexcept {
-			return Ubpa::detail::DX12::FG::Rsrc_::hash_of(desc);
+			return Ubpa::UFG::DX12::detail::hash_of(desc);
 		}
 	};
 }

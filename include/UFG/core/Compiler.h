@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <set>
 
-namespace Ubpa::FG {
+namespace Ubpa::UFG {
 	class Compiler {
 	public:
 		struct Result {

@@ -6,7 +6,7 @@
 
 #include <functional>
 
-namespace Ubpa::DX12::FG {
+namespace Ubpa::UFG::DX12 {
 	class RsrcMngr;
 
 	class Executor {
@@ -20,7 +20,7 @@ namespace Ubpa::DX12::FG {
 			passFuncs.clear();
 		}
 
-		void Execute(const Ubpa::FG::Compiler::Result& crst, RsrcMngr& rsrcMngr);
+		void Execute(const Compiler::Result& crst, RsrcMngr& rsrcMngr);
 
 	private:
 		std::unordered_map<size_t, std::function<void(const PassRsrcs&)>> passFuncs;

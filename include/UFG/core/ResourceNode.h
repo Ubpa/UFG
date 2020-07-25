@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace Ubpa::FG {
+namespace Ubpa::UFG {
 	class ResourceNode {
 	public:
 		ResourceNode(std::string name)

@@ -1,36 +1,68 @@
 #include <UFG/core/FrameGraph.h>
 
-using namespace Ubpa;
+#include <cassert>
 
-size_t FG::FrameGraph::AddResourceNode(std::string name) {
-	size_t idx = rsrcNodes.size();
-	rsrcname2idx[name] = idx;
-	rsrcNodes.emplace_back(std::move(name));
+using namespace Ubpa;
+using namespace Ubpa::UFG;
+
+bool FrameGraph::IsRegisteredResourceNode(std::string_view name) const {
+	return name2rsrcNodeIdx.find(name) != name2rsrcNodeIdx.end();
+}
+
+size_t FrameGraph::GetResourceNodeIndex(std::string_view name) const {
+	assert(IsRegisteredResourceNode(name));
+	return name2rsrcNodeIdx.find(name)->second;
+}
+
+size_t FrameGraph::RegisterResourceNode(ResourceNode node) {
+	assert(!IsRegisteredResourceNode(node.Name()));
+	size_t idx = resourceNodes.size();
+	name2rsrcNodeIdx.emplace(node.Name(), idx);
+	resourceNodes.push_back(std::move(node));
 	return idx;
 }
 
-size_t FG::FrameGraph::AddPassNode(
+size_t FrameGraph::RegisterResourceNode(std::string node) {
+	return RegisterResourceNode(ResourceNode{ node });
+}
+
+bool FrameGraph::IsRegisteredPassNode(std::string_view name) const {
+	return name2passNodeIdx.find(name) != name2passNodeIdx.end();
+}
+
+size_t FrameGraph::GetPassNodeIndex(std::string_view name) const {
+	assert(IsRegisteredPassNode(name));
+	return name2passNodeIdx.find(name)->second;
+}
+
+size_t FrameGraph::RegisterPassNode(PassNode node) {
+	assert(!IsRegisteredPassNode(node.Name()));
+	size_t idx = passNodes.size();
+	name2passNodeIdx.emplace(node.Name(), idx);
+	passNodes.push_back(std::move(node));
+	return idx;
+}
+
+size_t FrameGraph::RegisterPassNode(
 	std::string name,
 	std::vector<size_t> inputs,
-	std::vector<size_t> outputs)
-{
-	size_t idx = passNodes.size();
-	passnodename2idx[name] = idx;
-	passNodes.emplace_back(std::move(name), std::move(inputs), std::move(outputs));
-	return idx;
+	std::vector<size_t> outputs
+) {
+	return RegisterPassNode(PassNode{ std::move(name), std::move(inputs), std::move(outputs) });
 }
 
-void FG::FrameGraph::Clear() {
-	rsrcname2idx.clear();
-	passnodename2idx.clear();
-	rsrcNodes.clear();
+void FrameGraph::Clear() noexcept {
+	name2rsrcNodeIdx.clear();
+	name2passNodeIdx.clear();
+	resourceNodes.clear();
 	passNodes.clear();
 }
 
-Graphviz::Graph FG::FrameGraph::ToGraphvizGraph() const {
-	Graphviz::Graph graph(Name, true);
 
-	auto& registrar = graph.GetRegistrar();
+UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
+	UGraphviz::Graph graph(name, true);
+
+	auto& registry = graph.GetRegistry();
 
 	auto& subgraph_rsrc = graph.GenSubgraph("Resource Nodes");
 	auto& subgraph_pass = graph.GenSubgraph("Pass Nodes");
@@ -53,25 +85,25 @@ Graphviz::Graph FG::FrameGraph::ToGraphvizGraph() const {
 	subgraph_read.RegisterGraphEdgeAttr("color", "#9BBB59");
 	subgraph_write.RegisterGraphEdgeAttr("color", "#B54E4C");
 
-	for (const auto& rsrcNode : rsrcNodes) {
-		auto rsrcIdx = registrar.RegisterNode(rsrcNode.Name());
-		subgraph_rsrc.AddNode(rsrcIdx);
+	for (const auto& rsrcNode : resourceNodes) {
+		auto rsrcIndex = registry.RegisterNode(rsrcNode.Name());
+		subgraph_rsrc.AddNode(rsrcIndex);
 	}
 
 	for (const auto& passNode : passNodes) {
-		size_t passIdx = registrar.RegisterNode(passNode.Name());
-		subgraph_pass.AddNode(passIdx);
+		size_t passIndex = registry.RegisterNode(passNode.Name());
+		subgraph_pass.AddNode(passIndex);
 
-		for (size_t rsrcNodeIdx : passNode.Inputs()) {
-			const auto& rsrcNodeName = rsrcNodes[rsrcNodeIdx].Name();
-			auto edgeIdx = registrar.RegisterEdge(registrar.GetNodeIdx(rsrcNodeName), passIdx);
-			subgraph_read.AddEdge(edgeIdx);
+		for (size_t rsrcNodeIndex : passNode.Inputs()) {
+			const auto& rsrcNodeName = resourceNodes[rsrcNodeIndex].Name();
+			auto edgeIndex = registry.RegisterEdge(registry.GetNodeIndex(rsrcNodeName), passIndex);
+			subgraph_read.AddEdge(edgeIndex);
 		}
 
-		for (size_t rsrcNodeIdx : passNode.Outputs()) {
-			const auto& rsrcNodeName = rsrcNodes[rsrcNodeIdx].Name();
-			auto edgeIdx = registrar.RegisterEdge(passIdx, registrar.GetNodeIdx(rsrcNodeName));
-			subgraph_write.AddEdge(edgeIdx);
+		for (size_t rsrcNodeIndex : passNode.Outputs()) {
+			const auto& rsrcNodeName = passNodes[rsrcNodeIndex].Name();
+			auto edgeIndex = registry.RegisterEdge(passIndex, registry.GetNodeIndex(rsrcNodeName));
+			subgraph_write.AddEdge(edgeIndex);
 		}
 	}
 

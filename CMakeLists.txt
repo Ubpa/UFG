@@ -8,12 +8,12 @@ Ubpa_InitUCMake()
 
 Ubpa_InitProject()
 
-Ubpa_AddDep(UGraphviz 0.1.0)
+Ubpa_AddDep(UGraphviz 0.1.4)
 
-set(Ubpa_UFG_BuildDX12 TRUE CACHE BOOL "build Frame Graph for DirectX 12")
+set(Ubpa_UFG_Build_DX12 TRUE CACHE BOOL "build Frame Graph for DirectX 12")
 
-if(Ubpa_UFG_BuildDX12)
-  Ubpa_AddDep(UDX12 0.0.3)
+if(Ubpa_UFG_Build_DX12)
+  Ubpa_AddDep(UDX12 0.0.5)
 endif()
 
 Ubpa_AddSubDirsRec(src)

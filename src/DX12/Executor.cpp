@@ -2,9 +2,9 @@
 
 #include <UFG/DX12/RsrcMngr.h>
 
-using namespace Ubpa::DX12;
+using namespace Ubpa::UFG;
 
-void FG::Executor::Execute(const Ubpa::FG::Compiler::Result& crst, RsrcMngr& rsrcMngr)
+void DX12::Executor::Execute(const Compiler::Result& crst, RsrcMngr& rsrcMngr)
 {
 	rsrcMngr.DHReserve();
 	rsrcMngr.AllocateHandle();

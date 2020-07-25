@@ -7,7 +7,7 @@
 
 using namespace Ubpa;
 
-using namespace Ubpa::FG;
+using namespace Ubpa::UFG;
 using namespace std;
 
 tuple<bool, vector<size_t>> Compiler::Result::PassGraph::TopoSort() const {

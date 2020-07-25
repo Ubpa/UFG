@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace Ubpa::FG {
+namespace Ubpa::UFG {
 	class PassNode {
 	public:
 		PassNode(std::string name,
