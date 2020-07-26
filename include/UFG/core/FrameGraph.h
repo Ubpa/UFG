@@ -2,14 +2,17 @@
 
 #include "ResourceNode.h"
 #include "PassNode.h"
+#include "MoveNode.h"
 
 #include <UGraphviz/UGraphviz.h>
 
 #include <map>
+#include <unordered_map>
 
 namespace Ubpa::UFG {
-	// add all resource nodes first
-	// then add pass nodes
+	// 1. Add all resource nodes first, then add pass nodes
+	// 2. write means (read + write)
+	// 3. resource lifecycle: move in -> write -> reads -> move out
 	class FrameGraph {
 	public:
 		FrameGraph(std::string name) : name{ std::move(name) } {}
@@ -18,12 +21,17 @@ namespace Ubpa::UFG {
 
 		const std::vector<ResourceNode>& GetResourceNodes() const noexcept { return resourceNodes; }
 		const std::vector<PassNode>& GetPassNodes() const noexcept { return passNodes; }
+		const std::vector<MoveNode>& GetMoveNodes() const noexcept { return moveNodes; }
 
 		bool IsRegisteredResourceNode(std::string_view name) const;
 		bool IsRegisteredPassNode(std::string_view name) const;
+		bool IsRegisteredMoveNode(size_t dst, size_t src) const;
+		bool IsMovedOut(size_t src) const;
+		bool IsMovedIn(size_t dst) const;
 
 		size_t GetResourceNodeIndex(std::string_view name) const;
 		size_t GetPassNodeIndex(std::string_view name) const;
+		size_t GetMoveNodeIndex(size_t dst, size_t src) const;
 
 		size_t RegisterResourceNode(ResourceNode node);
 		size_t RegisterResourceNode(std::string node);
@@ -39,6 +47,8 @@ namespace Ubpa::UFG {
 			const std::array<std::string_view, N>& inputs_str,
 			const std::array<std::string_view, M>& outputs_str
 		);
+		size_t RegisterMoveNode(MoveNode node);
+		size_t RegisterMoveNode(size_t dst, size_t src);
 
 		void Clear() noexcept;
 
@@ -47,8 +57,11 @@ namespace Ubpa::UFG {
 		std::string name;
 		std::vector<ResourceNode> resourceNodes;
 		std::vector<PassNode> passNodes;
+		std::vector<MoveNode> moveNodes;
 		std::map<std::string, size_t, std::less<>> name2rsrcNodeIdx;
 		std::map<std::string, size_t, std::less<>> name2passNodeIdx;
+		std::unordered_map<size_t, size_t> srcRsrcNodeIdx2moveNodeIdx;
+		std::unordered_map<size_t, size_t> dstRsrcNodeIdx2moveNodeIdx;
 	};
 }
 

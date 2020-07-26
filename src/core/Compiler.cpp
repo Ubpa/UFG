@@ -62,9 +62,18 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 			rst.rsrc2info[output].writer = i;
 	}
 
+	for (const auto& moveNode : fg.GetMoveNodes()) {
+		auto src = moveNode.GetSourceNodeIndex();
+		auto dst = moveNode.GetDestinationNodeIndex();
+		rst.rsrc2info[dst].inRsrcNodeIdx = src;
+		rst.rsrc2info[src].outRsrcNodeIdx = dst;
+	}
+
 	for (const auto& [name, info] : rst.rsrc2info) {
-		if (info.writer == static_cast<size_t>(-1) && info.readers.size() == 0)
-			return { false, {} };
+		/*if (info.writer == static_cast<size_t>(-1) && info.readers.size() == 0)
+			return { false, {} };*/
+		if (info.writer == static_cast<size_t>(-1))
+			continue;
 
 		auto& adj = rst.passgraph.adjList[info.writer];
 		for (const auto& reader : info.readers)

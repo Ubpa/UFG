@@ -180,6 +180,12 @@ int main() {
 				cout << "    * " << fg.GetPassNodes().at(reader).Name() << endl;
 		}
 
+		if (info.inRsrcNodeIdx != static_cast<size_t>(-1))
+			cout << "  - in resource node index : " << info.inRsrcNodeIdx << endl;
+
+		if (info.outRsrcNodeIdx != static_cast<size_t>(-1))
+			cout << "  - out resource node index : " << info.outRsrcNodeIdx << endl;
+
 		cout << "  - lifetime: " << fg.GetPassNodes().at(crst.sortedPasses[info.first]).Name() << " - "
 			<< fg.GetPassNodes().at(crst.sortedPasses[info.last]).Name();
 		cout << endl;

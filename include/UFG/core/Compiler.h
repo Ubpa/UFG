@@ -15,6 +15,8 @@ namespace Ubpa::UFG {
 
 				std::vector<size_t> readers;
 				size_t writer{ static_cast<size_t>(-1) };
+				size_t inRsrcNodeIdx{ static_cast<size_t>(-1) };
+				size_t outRsrcNodeIdx{ static_cast<size_t>(-1) };
 			};
 
 			struct PassInfo {
