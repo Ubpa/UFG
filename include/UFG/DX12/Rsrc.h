@@ -17,14 +17,14 @@ namespace Ubpa::UFG::DX12::detail {
 	size_t hash_of(const T& v) {
 		using U =
 			std::conditional_t<alignof(T) == 1,
-			std::uint8_t,
-			std::conditional_t<alignof(T) == 2,
-			std::uint16_t,
-			std::conditional_t<alignof(T) == 4,
-			std::uint32_t,
-			std::uint64_t
-			>
-			>
+				std::uint8_t,
+				std::conditional_t<alignof(T) == 2,
+					std::uint16_t,
+					std::conditional_t<alignof(T) == 4,
+						std::uint32_t,
+						std::uint64_t
+					>
+				>
 			>;
 
 		size_t rst = 0;
@@ -42,14 +42,14 @@ namespace Ubpa::UFG::DX12::detail {
 	bool bitwise_equal(const T& lhs, const T& rhs) noexcept {
 		using U =
 			std::conditional_t<alignof(T) == 1,
-			std::uint8_t,
-			std::conditional_t<alignof(T) == 2,
-			std::uint16_t,
-			std::conditional_t<alignof(T) == 4,
-			std::uint32_t,
-			std::uint64_t
-			>
-			>
+				std::uint8_t,
+				std::conditional_t<alignof(T) == 2,
+					std::uint16_t,
+					std::conditional_t<alignof(T) == 4,
+						std::uint32_t,
+						std::uint64_t
+					>
+				>
 			>;
 
 		const U* u_lhs = reinterpret_cast<const U*>(&lhs);
