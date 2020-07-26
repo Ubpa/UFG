@@ -20,6 +20,7 @@ namespace Ubpa::UFG {
 			struct PassInfo {
 				std::vector<size_t> constructRsrcs;
 				std::vector<size_t> destructRsrcs;
+				std::vector<size_t> moveRsrcs; // src
 			};
 
 			struct PassGraph {
@@ -33,7 +34,8 @@ namespace Ubpa::UFG {
 			PassGraph passgraph;
 			std::vector<size_t> sortedPasses;
 			std::unordered_map<size_t, PassInfo> idx2info; // pass index to pass info
-			std::unordered_map<size_t, size_t> moves; // src -> dst
+			std::unordered_map<size_t, size_t> moves_src2dst;
+			std::unordered_map<size_t, size_t> moves_dst2src;
 		};
 
 		std::tuple<bool, Result> Compile(const FrameGraph& fg);

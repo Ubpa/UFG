@@ -1,6 +1,7 @@
 #include <UFG/core/core.h>
 
 #include <iostream>
+#include <cassert>
 
 using namespace std;
 using namespace Ubpa;
@@ -8,21 +9,16 @@ using namespace Ubpa;
 class ResourceMngr {
 public:
 	void Construct(const UFG::FrameGraph& fg, size_t rsrcNodeIdx) {
-		if (fg.IsMovedIn(rsrcNodeIdx)) {
-			cout << "[Move In] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name()
-				<< " <- " << fg.GetResourceNodes().at(fg.GetMoveSourceNodeIndex(rsrcNodeIdx)).Name() << endl;
-		}
-		else
-			cout << "[Construct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+		cout << "[Construct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
 	}
 
 	void Destruct(const UFG::FrameGraph& fg, size_t rsrcNodeIdx) {
-		if (fg.IsMovedOut(rsrcNodeIdx)) {
-			cout << "[Move Out] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name()
-				<< " -> " << fg.GetResourceNodes().at(fg.GetMoveDestinationNodeIndex(rsrcNodeIdx)).Name() << endl;
-		}
-		else
-			cout << "[Destruct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+		cout << "[Destruct]  " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+	}
+
+	void Move(const UFG::FrameGraph& fg, size_t dstRsrcNodeIdx, size_t srcRsrcNodeIdx) {
+		cout << "[Move]      " << fg.GetResourceNodes().at(dstRsrcNodeIdx).Name()
+			<< " <- " << fg.GetResourceNodes().at(srcRsrcNodeIdx).Name() << endl;
 	}
 };
 
@@ -33,6 +29,17 @@ public:
 		const UFG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
+		auto target = crst.idx2info.find(static_cast<size_t>(-1));
+		if (target != crst.idx2info.end()) {
+			const auto& passinfo = target->second;
+			for (const auto& rsrc : passinfo.constructRsrcs)
+				rsrcMngr.Construct(fg, rsrc);
+			for (const auto& rsrc : passinfo.destructRsrcs)
+				rsrcMngr.Destruct(fg, rsrc);
+			for (const auto& rsrc : passinfo.moveRsrcs)
+				rsrcMngr.Move(fg, crst.moves_src2dst.find(rsrc)->second, rsrc);
+		}
+
 		const auto& passnodes = fg.GetPassNodes();
 		for (auto i : crst.sortedPasses) {
 			const auto& passinfo = crst.idx2info.find(i)->second;
@@ -40,10 +47,13 @@ public:
 			for (const auto& rsrc : passinfo.constructRsrcs)
 				rsrcMngr.Construct(fg, rsrc);
 
-			cout << "[Execute] " << passnodes[i].Name() << endl;
+			cout << "[Execute]   " << passnodes[i].Name() << endl;
 
 			for (const auto& rsrc : passinfo.destructRsrcs)
 				rsrcMngr.Destruct(fg, rsrc);
+
+			for (const auto& rsrc : passinfo.moveRsrcs)
+				rsrcMngr.Move(fg, crst.moves_src2dst.find(rsrc)->second, rsrc);
 		}
 	}
 };

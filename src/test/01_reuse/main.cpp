@@ -39,32 +39,40 @@ public:
 
 		if (IsImported(rsrcNodeIndex)) {
 			rsrc = importeds[rsrcNodeIndex];
-			cout << "[Construct] Import | " << name << " @" << rsrc.buffer << endl;
+			cout << "[Construct] Import  | " << name << " @" << rsrc.buffer << endl;
 		}
 		else {
 			auto type = temporals[rsrcNodeIndex];
 			auto& typefrees = pool[type];
 			if (typefrees.empty()) {
 				rsrc.buffer = new float[type.size];
-				cout << "[Construct] Create | " << name << " @" << rsrc.buffer << endl;
+				cout << "[Construct] Create  | " << name << " @" << rsrc.buffer << endl;
 			}
 			else {
 				rsrc = typefrees.back();
 				typefrees.pop_back();
-				cout << "[Construct] Init | " << name << " @" << rsrc.buffer << endl;
+				cout << "[Construct] Reuse   | " << name << " @" << rsrc.buffer << endl;
 			}
 		}
 		actives[rsrcNodeIndex] = rsrc;
+	}
+
+	void Move(const string& dstName, size_t dstRsrcNodeIndex,
+		const string& srcName, size_t srcRsrcNodeIndex)
+	{
+		cout << "[Move]      " << dstName << " <- " << srcName << " @" << actives[dstRsrcNodeIndex].buffer << endl;
+		actives[dstRsrcNodeIndex] = actives[srcRsrcNodeIndex];
+		actives.erase(srcRsrcNodeIndex);
 	}
 
 	void Destruct(const string& name, size_t rsrcNodeIndex) {
 		auto rsrc = actives[rsrcNodeIndex];
 		if (!IsImported(rsrcNodeIndex)) {
 			pool[temporals[rsrcNodeIndex]].push_back(actives[rsrcNodeIndex]);
-			cout << "[Destruct] Recycle | " << name << " @" << rsrc.buffer << endl;
+			cout << "[Destruct]  Recycle | " << name << " @" << rsrc.buffer << endl;
 		}
 		else
-			cout << "[Destruct] Import | " << name << " @" << rsrc.buffer << endl;
+			cout << "[Destruct]  Import  | " << name << " @" << rsrc.buffer << endl;
 
 		actives.erase(rsrcNodeIndex);
 	}
@@ -101,6 +109,19 @@ public:
 		const UFG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
+		auto target = crst.idx2info.find(static_cast<size_t>(-1));
+		if (target != crst.idx2info.end()) {
+			const auto& passinfo = target->second;
+			for (const auto& rsrc : passinfo.constructRsrcs)
+				rsrcMngr.Construct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+			for (const auto& rsrc : passinfo.destructRsrcs)
+				rsrcMngr.Destruct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+			for (const auto& rsrc : passinfo.moveRsrcs) {
+				auto dst = crst.moves_src2dst.find(rsrc)->second;
+				rsrcMngr.Move(fg.GetResourceNodes().at(dst).Name(), dst, fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+			}
+		}
+
 		const auto& passnodes = fg.GetPassNodes();
 		for (auto i : crst.sortedPasses) {
 			const auto& passinfo = crst.idx2info.find(i)->second;
@@ -108,18 +129,24 @@ public:
 			for (const auto& rsrc : passinfo.constructRsrcs)
 				rsrcMngr.Construct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
 
-			cout << "[Execute] " << passnodes[i].Name() << endl;
+			cout << "[Execute]   " << passnodes[i].Name() << endl;
 
 			for (const auto& rsrc : passinfo.destructRsrcs)
 				rsrcMngr.Destruct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+
+			for (const auto& rsrc : passinfo.moveRsrcs) {
+				auto dst = crst.moves_src2dst.find(rsrc)->second;
+				rsrcMngr.Move(fg.GetResourceNodes().at(dst).Name(), dst, fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+			}
 		}
 	}
 };
 
 int main() {
-	UFG::FrameGraph fg("test 00 basic");
+	UFG::FrameGraph fg("test 01 reuse");
 
 	size_t depthbuffer = fg.RegisterResourceNode("Depth Buffer");
+	size_t depthbuffer2 = fg.RegisterResourceNode("Depth Buffer 2");
 	size_t gbuffer1 = fg.RegisterResourceNode("GBuffer1");
 	size_t gbuffer2 = fg.RegisterResourceNode("GBuffer2");
 	size_t gbuffer3 = fg.RegisterResourceNode("GBuffer3");
@@ -132,20 +159,26 @@ int main() {
 		{},
 		{ depthbuffer }
 	);
+	fg.RegisterMoveNode(depthbuffer2, depthbuffer);
 	fg.RegisterPassNode(
 		"GBuffer pass",
-		{ depthbuffer },
-		{ gbuffer1,gbuffer2,gbuffer3 }
+		{ },
+		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 }
 	);
 	fg.RegisterPassNode(
 		"Lighting",
-		{ depthbuffer,gbuffer1,gbuffer2,gbuffer3 },
+		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 },
 		{ lightingbuffer }
 	);
 	fg.RegisterPassNode(
 		"Post",
 		{ lightingbuffer },
 		{ finaltarget }
+	);
+	fg.RegisterPassNode(
+		"Present",
+		{ finaltarget },
+		{ }
 	);
 	fg.RegisterPassNode(
 		"Debug View",
@@ -164,6 +197,9 @@ int main() {
 	UFG::Compiler compiler;
 
 	auto [success, crst] = compiler.Compile(fg);
+
+	cout << "------------------------[pass graph]------------------------" << endl;
+	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[pass order]------------------------" << endl;
 	for (size_t i = 0; i < crst.sortedPasses.size(); i++)
@@ -196,7 +232,9 @@ int main() {
 
 	rsrcMngr
 		.RegisterImportedRsrc(finaltarget, { nullptr })
+
 		.RegisterTemporalRsrc(depthbuffer, { 32 })
+		.RegisterTemporalRsrc(depthbuffer2, { 32 })
 		.RegisterTemporalRsrc(gbuffer1, { 32 })
 		.RegisterTemporalRsrc(gbuffer2, { 32 })
 		.RegisterTemporalRsrc(gbuffer3, { 32 })
