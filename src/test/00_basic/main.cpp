@@ -8,11 +8,21 @@ using namespace Ubpa;
 class ResourceMngr {
 public:
 	void Construct(const UFG::FrameGraph& fg, size_t rsrcNodeIdx) {
-		cout << "[Construct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+		if (fg.IsMovedIn(rsrcNodeIdx)) {
+			cout << "[Move In] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name()
+				<< " <- " << fg.GetResourceNodes().at(fg.GetMoveSourceNodeIndex(rsrcNodeIdx)).Name() << endl;
+		}
+		else
+			cout << "[Construct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
 	}
 
 	void Destruct(const UFG::FrameGraph& fg, size_t rsrcNodeIdx) {
-		cout << "[Destruct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+		if (fg.IsMovedOut(rsrcNodeIdx)) {
+			cout << "[Move Out] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name()
+				<< " -> " << fg.GetResourceNodes().at(fg.GetMoveDestinationNodeIndex(rsrcNodeIdx)).Name() << endl;
+		}
+		else
+			cout << "[Destruct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
 	}
 };
 
@@ -63,13 +73,18 @@ int main() {
 	);
 	fg.RegisterPassNode(
 		"Lighting",
-		{ gbuffer1,gbuffer2,gbuffer3 },
+		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 },
 		{ lightingbuffer }
 	);
 	fg.RegisterPassNode(
 		"Post",
 		{ lightingbuffer },
 		{ finaltarget }
+	);
+	fg.RegisterPassNode(
+		"Present",
+		{ finaltarget },
+		{ }
 	);
 	fg.RegisterPassNode(
 		"Debug View",
@@ -89,6 +104,9 @@ int main() {
 
 	auto [success, crst] = compiler.Compile(fg);
 
+	cout << "------------------------[pass graph]------------------------" << endl;
+	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
+
 	cout << "------------------------[pass order]------------------------" << endl;
 	for (size_t i = 0; i < crst.sortedPasses.size(); i++)
 		cout << i << ": " << fg.GetPassNodes().at(crst.sortedPasses[i]).Name() << endl;
@@ -103,12 +121,6 @@ int main() {
 			for (auto reader : info.readers)
 				cout << "    * " << fg.GetPassNodes().at(reader).Name() << endl;
 		}
-
-		if (info.inRsrcNodeIdx != static_cast<size_t>(-1))
-			cout << "  - in resource node index : " << info.inRsrcNodeIdx << endl;
-
-		if (info.outRsrcNodeIdx != static_cast<size_t>(-1))
-			cout << "  - out resource node index : " << info.outRsrcNodeIdx << endl;
 
 		cout << "  - lifetime: " << fg.GetPassNodes().at(crst.sortedPasses[info.first]).Name() << " - "
 			<< fg.GetPassNodes().at(crst.sortedPasses[info.last]).Name();

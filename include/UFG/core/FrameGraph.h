@@ -32,6 +32,8 @@ namespace Ubpa::UFG {
 		size_t GetResourceNodeIndex(std::string_view name) const;
 		size_t GetPassNodeIndex(std::string_view name) const;
 		size_t GetMoveNodeIndex(size_t dst, size_t src) const;
+		size_t GetMoveSourceNodeIndex(size_t dst) const;
+		size_t GetMoveDestinationNodeIndex(size_t src) const;
 
 		size_t RegisterResourceNode(ResourceNode node);
 		size_t RegisterResourceNode(std::string node);

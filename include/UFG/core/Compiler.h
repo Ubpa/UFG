@@ -15,8 +15,6 @@ namespace Ubpa::UFG {
 
 				std::vector<size_t> readers;
 				size_t writer{ static_cast<size_t>(-1) };
-				size_t inRsrcNodeIdx{ static_cast<size_t>(-1) };
-				size_t outRsrcNodeIdx{ static_cast<size_t>(-1) };
 			};
 
 			struct PassInfo {
@@ -28,12 +26,14 @@ namespace Ubpa::UFG {
 				void Clear() { adjList.clear(); }
 				std::tuple<bool, std::vector<size_t>> TopoSort() const;
 				std::unordered_map<size_t, std::set<size_t>> adjList;
+				UGraphviz::Graph ToGraphvizGraph(const FrameGraph& fg) const;
 			};
 
 			std::unordered_map<size_t, RsrcInfo> rsrc2info;
 			PassGraph passgraph;
 			std::vector<size_t> sortedPasses;
 			std::unordered_map<size_t, PassInfo> idx2info; // pass index to pass info
+			std::unordered_map<size_t, size_t> moves; // src -> dst
 		};
 
 		std::tuple<bool, Result> Compile(const FrameGraph& fg);

@@ -51,6 +51,8 @@ tuple<bool, vector<size_t>> Compiler::Result::PassGraph::TopoSort() const {
 }
 
 tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
+	const tuple<bool, Compiler::Result> fail{ false, {} };
+
 	Result rst;
 	const auto& passes = fg.GetPassNodes();
 
@@ -65,10 +67,42 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	for (const auto& moveNode : fg.GetMoveNodes()) {
 		auto src = moveNode.GetSourceNodeIndex();
 		auto dst = moveNode.GetDestinationNodeIndex();
-		rst.rsrc2info[dst].inRsrcNodeIdx = src;
-		rst.rsrc2info[src].outRsrcNodeIdx = dst;
+		if (rst.moves.find(src) != rst.moves.end())
+			return fail; // move out more than once
+		rst.moves.emplace(src, dst);
 	}
 
+	// pruning move
+	std::set<size_t> deleteMoves;
+	auto iter = rst.moves.begin();
+	while (iter != rst.moves.end()) {
+		auto& [src, dst] = *iter;
+		if (deleteMoves.find(src) != deleteMoves.end()) {
+			++iter;
+			continue;
+		}
+
+		const auto& info = rst.rsrc2info.find(dst)->second;
+		auto next = rst.moves.find(dst);
+		if (info.writer == static_cast<size_t>(-1)
+			&& info.readers.empty()
+			&& next != rst.moves.end())
+		{
+			dst = next->second;
+			deleteMoves.insert(dst);
+		}
+		else
+			++iter;
+	}
+	for (auto idx : deleteMoves)
+		rst.moves.erase(idx);
+
+	// init rst.passgraph.adjList
+	rst.passgraph.adjList.reserve(passes.size());
+	for (size_t i = 0; i < passes.size(); i++)
+		rst.passgraph.adjList.try_emplace(i);
+
+	// resource order (write -> readers)
 	for (const auto& [name, info] : rst.rsrc2info) {
 		/*if (info.writer == static_cast<size_t>(-1) && info.readers.size() == 0)
 			return { false, {} };*/
@@ -80,7 +114,40 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 			adj.insert(reader);
 	}
 
-	// sortedPasses : order 2 index
+	// move order
+	for (const auto& [src, dst] : rst.moves) {
+		const auto& info_dst = rst.rsrc2info.find(dst)->second;
+		const auto& info_src = rst.rsrc2info.find(src)->second;
+		if (info_dst.writer != static_cast<size_t>(-1)) {
+			if (!info_src.readers.empty()) {
+				for (auto reader_src : info_src.readers)
+					rst.passgraph.adjList[reader_src].insert(info_dst.writer);
+			}
+			else if (info_src.writer != static_cast<size_t>(-1))
+				rst.passgraph.adjList[info_src.writer].insert(info_dst.writer);
+			// else [do nothing]
+		}
+		else if (!info_dst.readers.empty()) {
+			if (!info_src.readers.empty()) {
+				for (auto reader_src : info_src.readers) {
+					rst.passgraph.adjList[reader_src].insert(
+						info_dst.readers.begin(),
+						info_dst.readers.end()
+					);
+				}
+			}
+			else if (info_src.writer != static_cast<size_t>(-1)) {
+				rst.passgraph.adjList[info_src.writer].insert(
+					info_dst.readers.begin(),
+					info_dst.readers.end()
+				);
+			}
+			// else [do nothing]
+		}
+		// else [do nothing]
+	}
+
+	// sortedPasses : order -> index
 	auto [success, sortedPasses] = rst.passgraph.TopoSort();
 	if (!success)
 		return { false,{} };
@@ -109,10 +176,37 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 		else
 			info.last = info.first;
 
-		rst.idx2info[info.first].constructRsrcs.push_back(rsrcNodeIdx);
+		rst.idx2info[sortedPasses[info.first]].constructRsrcs.push_back(rsrcNodeIdx);
 		rst.idx2info[sortedPasses[info.last]].destructRsrcs.push_back(rsrcNodeIdx);
 	}
 
 	rst.sortedPasses = move(sortedPasses);
 	return { true, rst };
+}
+
+UGraphviz::Graph Compiler::Result::PassGraph::ToGraphvizGraph(const FrameGraph& fg) const {
+	UGraphviz::Graph graph("Compiler Result Pass Graph", true);
+
+	auto& registry = graph.GetRegistry();
+
+	graph
+		.RegisterGraphNodeAttr("shape", "ellipse")
+		.RegisterGraphNodeAttr("color", "#6597AD")
+		.RegisterGraphEdgeAttr("color", "#B54E4C")
+		.RegisterGraphNodeAttr("style", "filled")
+		.RegisterGraphNodeAttr("fontcolor", "white")
+		.RegisterGraphNodeAttr("fontname", "consolas");
+
+	for (const auto& [src, dsts] : adjList)
+		graph.AddNode(registry.RegisterNode(fg.GetPassNodes().at(src).Name()));
+
+	for (const auto& [src, dsts] : adjList) {
+		auto idx_src = registry.GetNodeIndex(fg.GetPassNodes().at(src).Name());
+		for (auto dst : dsts) {
+			auto idx_dst = registry.GetNodeIndex(fg.GetPassNodes().at(dst).Name());
+			graph.AddEdge(registry.RegisterEdge(idx_src, idx_dst));
+		}
+	}
+
+	return graph;
 }
