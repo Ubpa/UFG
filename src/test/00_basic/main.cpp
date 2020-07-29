@@ -1,4 +1,4 @@
-#include <UFG/core/core.h>
+#include <UFG/UFG.h>
 
 #include <iostream>
 #include <cassert>
