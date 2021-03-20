@@ -1,4 +1,4 @@
-#include <UFG/UFG.h>
+#include <UFG/UFG.hpp>
 
 #include <iostream>
 

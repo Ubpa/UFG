@@ -1,4 +1,4 @@
-#include <UFG/FrameGraph.h>
+#include <UFG/FrameGraph.hpp>
 
 #include <cassert>
 

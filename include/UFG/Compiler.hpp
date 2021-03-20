@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FrameGraph.h"
+#include "FrameGraph.hpp"
 
 #include <unordered_map>
 #include <set>

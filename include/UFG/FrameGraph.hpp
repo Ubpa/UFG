@@ -1,10 +1,10 @@
 #pragma once
 
-#include "ResourceNode.h"
-#include "PassNode.h"
-#include "MoveNode.h"
+#include "ResourceNode.hpp"
+#include "PassNode.hpp"
+#include "MoveNode.hpp"
 
-#include <UGraphviz/UGraphviz.h>
+#include <UGraphviz/UGraphviz.hpp>
 
 #include <map>
 #include <unordered_map>
