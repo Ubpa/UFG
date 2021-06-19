@@ -173,6 +173,7 @@ public:
 
 		std::mutex mutex_rsrc;
 		std::mutex mutex_job_queue;
+		std::condition_variable cv;
 
 		for (const auto& [rsrc, info] : crst.rsrc2info) {
 			size_t cnt = info.readers.size();
@@ -189,16 +190,21 @@ public:
 				// request pass
 
 				{ // thread-safe
-					std::lock_guard<std::mutex> guard(mutex_job_queue);
+					std::unique_lock<std::mutex> lk(mutex_job_queue);
+					while (true) {
+						if (job_queue.IsDone()) {
+							cv.notify_one();
+							return;
+						}
 
-					if (job_queue.IsDone())
-						return;
-
-					pass = job_queue.Request();
+						pass = job_queue.Request();
+						if (pass == static_cast<size_t>(-1))
+							cv.wait(lk);
+						else
+							break;
+					}
 				}
-
-				if (pass == static_cast<size_t>(-1))
-					continue;
+				cv.notify_one();
 
 				// construct writed resources
 				{ // thread-safe
@@ -250,6 +256,7 @@ public:
 					std::lock_guard<std::mutex> guard(mutex_job_queue);
 					job_queue.Complete(pass);
 				}
+				cv.notify_one();
 			}
 		};
 
