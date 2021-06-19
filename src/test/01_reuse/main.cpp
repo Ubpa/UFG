@@ -219,13 +219,12 @@ int main() {
 	UFG::Compiler compiler;
 
 	auto crst = compiler.Compile(fg);
-	assert(crst.has_value());
 
 	cout << "------------------------[pass graph]------------------------" << endl;
-	cout << crst->passgraph.ToGraphvizGraph(fg).Dump() << endl;
+	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [idx, info] : crst->rsrc2info) {
+	for (const auto& [idx, info] : crst.rsrc2info) {
 		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl
 			<< "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
@@ -259,7 +258,7 @@ int main() {
 		.RegisterTemporalRsrc(lightingbuffer, { 32 });
 
 	Executor executor;
-	executor.Execute(fg, *crst, rsrcMngr);
+	executor.Execute(fg, crst, rsrcMngr);
 
 	return 0;
 }

@@ -33,6 +33,6 @@ namespace Ubpa::UFG {
 			std::unordered_map<size_t, size_t> moves_dst2src;
 		};
 
-		std::optional<Result> Compile(const FrameGraph& fg);
+		Result Compile(const FrameGraph& fg);
 	};
 }

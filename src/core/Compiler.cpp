@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <stack>
 #include <cassert>
+#include <stdexcept>
 
 using namespace Ubpa;
 
@@ -51,7 +52,7 @@ std::optional<std::vector<size_t>> Compiler::Result::PassGraph::TopoSort() const
 	return sorted_vertices;
 }
 
-std::optional<Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
+Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 	Result rst;
 	auto passes = fg.GetPassNodes();
 
@@ -63,7 +64,7 @@ std::optional<Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 		for (const auto& output : pass.Outputs()) {
 			auto& info = rst.rsrc2info[output];
 			if (info.writer != static_cast<size_t>(-1))
-				return {}; // multi writers
+				throw std::logic_error("multi writers");
 			rst.rsrc2info[output].writer = i;
 		}
 	}
@@ -75,9 +76,9 @@ std::optional<Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 			auto src = moveNode.GetSourceNodeIndex();
 			auto dst = moveNode.GetDestinationNodeIndex();
 			if (rst.moves_src2dst.contains(src))
-				return {}; // move out more than once
+				throw std::logic_error("move out more than once");
 			if (movedsts.contains(dst))
-				return {}; // move in more than once
+				throw std::logic_error("move in more than once");
 			rst.moves_src2dst.emplace(src, dst);
 			movedsts.insert(dst);
 		}
@@ -107,12 +108,6 @@ std::optional<Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	}
 	for (auto idx : deleteMoves)
 		rst.moves_src2dst.erase(idx);
-
-	// move_src2dst -> move_dst2src
-	for (const auto& [src, dst] : rst.moves_src2dst) {
-		auto [iter, success] = rst.moves_dst2src.emplace(dst, src);
-		assert(success);
-	}
 
 	// init rst.passgraph.adjList
 	rst.passgraph.adjList.reserve(passes.size());
@@ -206,10 +201,15 @@ std::optional<Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 		// else [[do nothing]];
 	}
 
-	// sortedPasses : order -> index
 	auto sortedPasses = rst.passgraph.TopoSort();
 	if (!sortedPasses)
-		return {}; // not a DAG
+		throw std::logic_error("not a DAG");
+
+	// move_src2dst -> move_dst2src
+	for (const auto& [src, dst] : rst.moves_src2dst) {
+		auto [iter, success] = rst.moves_dst2src.emplace(dst, src);
+		assert(success);
+	}
 
 	return rst;
 }
