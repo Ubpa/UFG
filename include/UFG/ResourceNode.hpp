@@ -8,7 +8,7 @@ namespace Ubpa::UFG {
 		ResourceNode(std::string name)
 			: name{ std::move(name) } {}
 
-		const std::string& Name() const noexcept { return name; }
+		std::string_view Name() const noexcept { return name; }
 	private:
 		std::string name;
 	};

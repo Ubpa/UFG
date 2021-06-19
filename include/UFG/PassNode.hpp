@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <span>
 
 namespace Ubpa::UFG {
 	class PassNode {
@@ -13,9 +14,9 @@ namespace Ubpa::UFG {
 			inputs{ std::move(inputs) },
 			outputs{ std::move(outputs) } {}
 
-		const std::string& Name() const noexcept { return name; }
-		const std::vector<size_t>& Inputs() const noexcept { return inputs; }
-		const std::vector<size_t>& Outputs() const noexcept { return outputs; }
+		std::string_view Name() const noexcept { return name; }
+		std::span<const size_t> Inputs() const noexcept { return inputs; }
+		std::span<const size_t> Outputs() const noexcept { return outputs; }
 
 	private:
 		std::string name;

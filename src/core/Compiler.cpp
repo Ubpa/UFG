@@ -11,7 +11,7 @@ using namespace Ubpa;
 using namespace Ubpa::UFG;
 using namespace std;
 
-tuple<bool, vector<size_t>> Compiler::Result::PassGraph::TopoSort() const {
+std::optional<std::vector<size_t>> Compiler::Result::PassGraph::TopoSort() const {
 	unordered_map<size_t, size_t> in_degree_map;
 
 	for (const auto& [parent, children] : adjList)
@@ -46,44 +46,54 @@ tuple<bool, vector<size_t>> Compiler::Result::PassGraph::TopoSort() const {
 	}
 
 	if (!in_degree_map.empty())
-		return { false, vector<size_t>{} };
+		return {};
 
-	return { true, sorted_vertices };
+	return sorted_vertices;
 }
 
-tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
-	const tuple<bool, Compiler::Result> fail{ false, {} };
-
+std::optional<Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	Result rst;
-	const auto& passes = fg.GetPassNodes();
+	auto passes = fg.GetPassNodes();
 
+	// set every resource's readers and writers
 	for (size_t i = 0; i < passes.size(); i++) {
 		const auto& pass = passes[i];
 		for (const auto& input : pass.Inputs())
 			rst.rsrc2info[input].readers.push_back(i);
-		for (const auto& output : pass.Outputs())
+		for (const auto& output : pass.Outputs()) {
+			auto& info = rst.rsrc2info[output];
+			if (info.writer != static_cast<size_t>(-1))
+				return {}; // multi writers
 			rst.rsrc2info[output].writer = i;
+		}
 	}
 
-	for (const auto& moveNode : fg.GetMoveNodes()) {
-		auto src = moveNode.GetSourceNodeIndex();
-		auto dst = moveNode.GetDestinationNodeIndex();
-		if (rst.moves_src2dst.find(src) != rst.moves_src2dst.end())
-			return fail; // move out more than once
-		rst.moves_src2dst.emplace(src, dst);
+	// set move map
+	{
+		std::unordered_set<size_t> movedsts;
+		for (const auto& moveNode : fg.GetMoveNodes()) {
+			auto src = moveNode.GetSourceNodeIndex();
+			auto dst = moveNode.GetDestinationNodeIndex();
+			if (rst.moves_src2dst.contains(src))
+				return {}; // move out more than once
+			if (movedsts.contains(dst))
+				return {}; // move in more than once
+			rst.moves_src2dst.emplace(src, dst);
+			movedsts.insert(dst);
+		}
 	}
 
-	// pruning move
+	// pruning continuous move without reading and writing
 	std::set<size_t> deleteMoves;
 	auto iter = rst.moves_src2dst.begin();
 	while (iter != rst.moves_src2dst.end()) {
 		auto& [src, dst] = *iter;
-		if (deleteMoves.find(src) != deleteMoves.end()) {
+		if (deleteMoves.contains(src)) {
 			++iter;
 			continue;
 		}
 
-		const auto& info = rst.rsrc2info.find(dst)->second;
+		const auto& info = rst.rsrc2info.at(dst);
 		auto next = rst.moves_src2dst.find(dst);
 		if (info.writer == static_cast<size_t>(-1)
 			&& info.readers.empty()
@@ -109,10 +119,8 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	for (size_t i = 0; i < passes.size(); i++)
 		rst.passgraph.adjList.try_emplace(i);
 
-	// resource order (write -> readers)
+	// set resource read/write orders: unique-write-pass -> multi-read-passes
 	for (const auto& [name, info] : rst.rsrc2info) {
-		/*if (info.writer == static_cast<size_t>(-1) && info.readers.size() == 0)
-			return { false, {} };*/
 		if (info.writer == static_cast<size_t>(-1))
 			continue;
 
@@ -121,21 +129,59 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 			adj.insert(reader);
 	}
 
-	// move order
-	for (const auto& [src, dst] : rst.moves_src2dst) {
-		const auto& info_dst = rst.rsrc2info.find(dst)->second;
-		const auto& info_src = rst.rsrc2info.find(src)->second;
+	// set resouce move order
+	for (auto [src, dst] : rst.moves_src2dst) {
+		// [src]
+		//   .
+		//   .
+		//   v
+		// [dst]
+
+		auto info_dst = rst.rsrc2info.at(dst);
+		auto info_src = rst.rsrc2info.at(src);
+
 		if (info_dst.writer != static_cast<size_t>(-1)) {
+			//           [src]
+			//             .
+			//             .
+			//             v
+			// writer -> [dst]
+
 			if (!info_src.readers.empty()) {
+				// readers <- [src]
+				//    |         .
+				//    |         .
+				//    v         v
+				// writer  -> [dst]
+
 				for (auto reader_src : info_src.readers)
 					rst.passgraph.adjList[reader_src].insert(info_dst.writer);
 			}
-			else if (info_src.writer != static_cast<size_t>(-1))
+			else if (info_src.writer != static_cast<size_t>(-1)) {
+				// writer -> [src]
+				//    |        .
+				//    |        .
+				//    v        v
+				// writer -> [dst]
+
 				rst.passgraph.adjList[info_src.writer].insert(info_dst.writer);
+			}
 			// else [do nothing]
 		}
 		else if (!info_dst.readers.empty()) {
+			//            [src]
+			//              .
+			//              .
+			//              v
+			// readers <- [dst]
+
 			if (!info_src.readers.empty()) {
+				// readers <- [src]
+				//    |         .
+				//    |         .
+				//    v         v
+				// readers <- [dst]
+
 				for (auto reader_src : info_src.readers) {
 					rst.passgraph.adjList[reader_src].insert(
 						info_dst.readers.begin(),
@@ -144,6 +190,12 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 				}
 			}
 			else if (info_src.writer != static_cast<size_t>(-1)) {
+				// writer  -> [src]
+				//    |         .
+				//    |         .
+				//    v         v
+				// readers <- [dst]
+
 				rst.passgraph.adjList[info_src.writer].insert(
 					info_dst.readers.begin(),
 					info_dst.readers.end()
@@ -155,50 +207,11 @@ tuple<bool, Compiler::Result> Compiler::Compile(const FrameGraph& fg) {
 	}
 
 	// sortedPasses : order -> index
-	auto [success, sortedPasses] = rst.passgraph.TopoSort();
-	if (!success)
-		return { false,{} };
+	auto sortedPasses = rst.passgraph.TopoSort();
+	if (!sortedPasses)
+		return {}; // not a DAG
 
-	vector<size_t> index2order(sortedPasses.size());
-	for (size_t i = 0; i < sortedPasses.size(); i++)
-		index2order[sortedPasses[i]] = i;
-
-	// set resource's first last
-	for (auto& [rsrcNodeIdx, info] : rst.rsrc2info) {
-		if (info.writer != static_cast<size_t>(-1)) {
-			info.first = index2order[info.writer];
-			info.last = info.first;
-			for (const auto& reader : info.readers)
-				info.last = max(info.last, index2order[reader]);
-		}
-		else if (!info.readers.empty()) {
-			size_t first = static_cast<size_t>(-1); // max size_t
-			for (const auto& reader : info.readers)
-				first = min(first, index2order[reader]);
-			info.first = first;
-		}
-		//else [[do nothing]]; // info.first = static_cast<size_t>(-1)
-
-		info.last = info.first;
-		for (const auto& reader : info.readers)
-			info.last = max(info.last, index2order[reader]);
-
-		assert(info.first == static_cast<size_t>(-1) || info.last != static_cast<size_t>(-1));
-
-		size_t firstPassIdx = info.first != static_cast<size_t>(-1) ? sortedPasses[info.first]
-			: static_cast<size_t>(-1);
-		size_t lastPassIdx = info.last != static_cast<size_t>(-1) ? sortedPasses[info.last]
-			: static_cast<size_t>(-1);
-		if (rst.moves_dst2src.find(rsrcNodeIdx) == rst.moves_dst2src.end())
-			rst.idx2info[firstPassIdx].constructRsrcs.push_back(rsrcNodeIdx);
-		if (rst.moves_src2dst.find(rsrcNodeIdx) != rst.moves_src2dst.end())
-			rst.idx2info[lastPassIdx].moveRsrcs.push_back(rsrcNodeIdx);
-		else
-			rst.idx2info[lastPassIdx].destructRsrcs.push_back(rsrcNodeIdx);
-	}
-
-	rst.sortedPasses = move(sortedPasses);
-	return { true, rst };
+	return rst;
 }
 
 UGraphviz::Graph Compiler::Result::PassGraph::ToGraphvizGraph(const FrameGraph& fg) const {
@@ -215,12 +228,12 @@ UGraphviz::Graph Compiler::Result::PassGraph::ToGraphvizGraph(const FrameGraph& 
 		.RegisterGraphNodeAttr("fontname", "consolas");
 
 	for (const auto& [src, dsts] : adjList)
-		graph.AddNode(registry.RegisterNode(fg.GetPassNodes().at(src).Name()));
+		graph.AddNode(registry.RegisterNode(std::string{ fg.GetPassNodes()[src].Name() }));
 
 	for (const auto& [src, dsts] : adjList) {
-		auto idx_src = registry.GetNodeIndex(fg.GetPassNodes().at(src).Name());
+		auto idx_src = registry.GetNodeIndex(std::string{ fg.GetPassNodes()[src].Name() });
 		for (auto dst : dsts) {
-			auto idx_dst = registry.GetNodeIndex(fg.GetPassNodes().at(dst).Name());
+			auto idx_dst = registry.GetNodeIndex(fg.GetPassNodes()[dst].Name());
 			graph.AddEdge(registry.RegisterEdge(idx_src, idx_dst));
 		}
 	}

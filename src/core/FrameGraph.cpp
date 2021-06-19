@@ -135,12 +135,12 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 	subgraph_move.RegisterGraphEdgeAttr("color", "#F79646");
 
 	for (const auto& rsrcNode : resourceNodes) {
-		auto rsrcIndex = registry.RegisterNode(rsrcNode.Name());
+		auto rsrcIndex = registry.RegisterNode(std::string{ rsrcNode.Name() });
 		subgraph_rsrc.AddNode(rsrcIndex);
 	}
 
 	for (const auto& passNode : passNodes) {
-		size_t passIndex = registry.RegisterNode(passNode.Name());
+		size_t passIndex = registry.RegisterNode(std::string{ passNode.Name() });
 		subgraph_pass.AddNode(passIndex);
 
 		for (size_t rsrcNodeIndex : passNode.Inputs()) {

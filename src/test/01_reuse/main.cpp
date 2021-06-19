@@ -1,6 +1,7 @@
 #include <UFG/UFG.hpp>
 
 #include <iostream>
+#include <cassert>
 
 using namespace std;
 using namespace Ubpa;
@@ -34,7 +35,7 @@ public:
 		}
 	}
 
-	void Construct(const string& name, size_t rsrcNodeIndex) {
+	void Construct(std::string_view name, size_t rsrcNodeIndex) {
 		Resource rsrc;
 
 		if (IsImported(rsrcNodeIndex)) {
@@ -57,15 +58,15 @@ public:
 		actives[rsrcNodeIndex] = rsrc;
 	}
 
-	void Move(const string& dstName, size_t dstRsrcNodeIndex,
-		const string& srcName, size_t srcRsrcNodeIndex)
+	void Move(std::string_view dstName, size_t dstRsrcNodeIndex,
+		std::string_view srcName, size_t srcRsrcNodeIndex)
 	{
-		cout << "[Move]      " << dstName << " <- " << srcName << " @" << actives[dstRsrcNodeIndex].buffer << endl;
+		cout << "[Move]      " << dstName << " <- " << srcName << " @" << actives[srcRsrcNodeIndex].buffer << endl;
 		actives[dstRsrcNodeIndex] = actives[srcRsrcNodeIndex];
 		actives.erase(srcRsrcNodeIndex);
 	}
 
-	void Destruct(const string& name, size_t rsrcNodeIndex) {
+	void Destruct(std::string_view name, size_t rsrcNodeIndex) {
 		auto rsrc = actives[rsrcNodeIndex];
 		if (!IsImported(rsrcNodeIndex)) {
 			pool[temporals[rsrcNodeIndex]].push_back(actives[rsrcNodeIndex]);
@@ -109,34 +110,55 @@ public:
 		const UFG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
-		auto target = crst.idx2info.find(static_cast<size_t>(-1));
-		if (target != crst.idx2info.end()) {
-			const auto& passinfo = target->second;
-			for (const auto& rsrc : passinfo.constructRsrcs)
-				rsrcMngr.Construct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
-			for (const auto& rsrc : passinfo.destructRsrcs)
-				rsrcMngr.Destruct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
-			for (const auto& rsrc : passinfo.moveRsrcs) {
-				auto dst = crst.moves_src2dst.find(rsrc)->second;
-				rsrcMngr.Move(fg.GetResourceNodes().at(dst).Name(), dst, fg.GetResourceNodes().at(rsrc).Name(), rsrc);
-			}
+		auto sorted_passes = crst.passgraph.TopoSort();
+		if (!sorted_passes)
+			return;
+
+		std::map<size_t, size_t> remain_user_cnt_map; // resource idx -> user cnt
+		for (const auto& [rsrc, info] : crst.rsrc2info) {
+			size_t cnt = info.readers.size();
+			if (info.writer != static_cast<size_t>(-1))
+				++cnt;
+			remain_user_cnt_map.emplace(rsrc, cnt);
 		}
 
-		const auto& passnodes = fg.GetPassNodes();
-		for (auto i : crst.sortedPasses) {
-			const auto& passinfo = crst.idx2info.find(i)->second;
+		for (auto pass : *sorted_passes) {
+			// construct writed resources
+			for (auto output : fg.GetPassNodes()[pass].Outputs()) {
+				if (crst.moves_dst2src.contains(output))
+					continue;
 
-			for (const auto& rsrc : passinfo.constructRsrcs)
-				rsrcMngr.Construct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+				rsrcMngr.Construct(fg.GetResourceNodes()[output].Name(), output);
+			}
 
-			cout << "[Execute]   " << passnodes[i].Name() << endl;
+			// execute
+			cout << "[Execute]   " << fg.GetPassNodes()[pass].Name() << endl;
 
-			for (const auto& rsrc : passinfo.destructRsrcs)
-				rsrcMngr.Destruct(fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+			// count down users
 
-			for (const auto& rsrc : passinfo.moveRsrcs) {
-				auto dst = crst.moves_src2dst.find(rsrc)->second;
-				rsrcMngr.Move(fg.GetResourceNodes().at(dst).Name(), dst, fg.GetResourceNodes().at(rsrc).Name(), rsrc);
+			auto destruct_or_move_resouce = [&](size_t rsrc) {
+				if (auto target = crst.moves_src2dst.find(rsrc); target != crst.moves_src2dst.end()) {
+					auto src = rsrc;
+					auto dst = target->second;
+					auto src_name = fg.GetResourceNodes()[src].Name();
+					auto dst_name = fg.GetResourceNodes()[dst].Name();
+					rsrcMngr.Move(dst_name, dst, src_name, src);
+				}
+				else
+					rsrcMngr.Destruct(fg.GetResourceNodes()[rsrc].Name(), rsrc);
+			};
+
+			for (auto input : fg.GetPassNodes()[pass].Inputs()) {
+				auto& cnt = remain_user_cnt_map[input];
+				--cnt;
+				if (cnt == 0)
+					destruct_or_move_resouce(input);
+			}
+			for (auto output : fg.GetPassNodes()[pass].Outputs()) {
+				auto& cnt = remain_user_cnt_map[output];
+				--cnt;
+				if (cnt == 0)
+					destruct_or_move_resouce(output);
 			}
 		}
 	}
@@ -189,35 +211,30 @@ int main() {
 	cout << "------------------------[frame graph]------------------------" << endl;
 	cout << "[Resource]" << endl;
 	for (size_t i = 0; i < fg.GetResourceNodes().size(); i++)
-		cout << "- " << i << " : " << fg.GetResourceNodes().at(i).Name() << endl;
+		cout << "- " << i << " : " << fg.GetResourceNodes()[i].Name() << endl;
 	cout << "[Pass]" << endl;
 	for (size_t i = 0; i < fg.GetPassNodes().size(); i++)
-		cout << "- " << i << " : " << fg.GetPassNodes().at(i).Name() << endl;
+		cout << "- " << i << " : " << fg.GetPassNodes()[i].Name() << endl;
 
 	UFG::Compiler compiler;
 
-	auto [success, crst] = compiler.Compile(fg);
+	auto crst = compiler.Compile(fg);
+	assert(crst.has_value());
 
 	cout << "------------------------[pass graph]------------------------" << endl;
-	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
-
-	cout << "------------------------[pass order]------------------------" << endl;
-	for (size_t i = 0; i < crst.sortedPasses.size(); i++)
-		cout << i << ": " << fg.GetPassNodes().at(crst.sortedPasses[i]).Name() << endl;
+	cout << crst->passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "- " << fg.GetResourceNodes().at(idx).Name() << endl
-			<< "  - writer: " << fg.GetPassNodes().at(info.writer).Name() << endl;
+	for (const auto& [idx, info] : crst->rsrc2info) {
+		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl
+			<< "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {
 			cout << "  - readers" << endl;
 			for (auto reader : info.readers)
-				cout << "    * " << fg.GetPassNodes().at(reader).Name() << endl;
+				cout << "    * " << fg.GetPassNodes()[reader].Name() << endl;
 		}
 
-		cout << "  - lifetime: " << fg.GetPassNodes().at(crst.sortedPasses[info.first]).Name() << " - "
-			<< fg.GetPassNodes().at(crst.sortedPasses[info.last]).Name();
 		cout << endl;
 	}
 
@@ -242,7 +259,7 @@ int main() {
 		.RegisterTemporalRsrc(lightingbuffer, { 32 });
 
 	Executor executor;
-	executor.Execute(fg, crst, rsrcMngr);
+	executor.Execute(fg, *crst, rsrcMngr);
 
 	return 0;
 }

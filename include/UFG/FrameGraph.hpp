@@ -8,6 +8,7 @@
 
 #include <map>
 #include <unordered_map>
+#include <span>
 
 namespace Ubpa::UFG {
 	// 1. Add all resource nodes first, then add pass nodes
@@ -19,9 +20,9 @@ namespace Ubpa::UFG {
 
 		const std::string& Name() const noexcept { return name; }
 
-		const std::vector<ResourceNode>& GetResourceNodes() const noexcept { return resourceNodes; }
-		const std::vector<PassNode>& GetPassNodes() const noexcept { return passNodes; }
-		const std::vector<MoveNode>& GetMoveNodes() const noexcept { return moveNodes; }
+		std::span<const ResourceNode> GetResourceNodes() const noexcept { return resourceNodes; }
+		std::span<const PassNode> GetPassNodes() const noexcept { return passNodes; }
+		std::span<const MoveNode> GetMoveNodes() const noexcept { return moveNodes; }
 
 		bool IsRegisteredResourceNode(std::string_view name) const;
 		bool IsRegisteredPassNode(std::string_view name) const;

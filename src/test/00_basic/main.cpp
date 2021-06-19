@@ -9,16 +9,16 @@ using namespace Ubpa;
 class ResourceMngr {
 public:
 	void Construct(const UFG::FrameGraph& fg, size_t rsrcNodeIdx) {
-		cout << "[Construct] " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+		cout << "[Construct] " << fg.GetResourceNodes()[rsrcNodeIdx].Name() << endl;
 	}
 
 	void Destruct(const UFG::FrameGraph& fg, size_t rsrcNodeIdx) {
-		cout << "[Destruct]  " << fg.GetResourceNodes().at(rsrcNodeIdx).Name() << endl;
+		cout << "[Destruct]  " << fg.GetResourceNodes()[rsrcNodeIdx].Name() << endl;
 	}
 
 	void Move(const UFG::FrameGraph& fg, size_t dstRsrcNodeIdx, size_t srcRsrcNodeIdx) {
-		cout << "[Move]      " << fg.GetResourceNodes().at(dstRsrcNodeIdx).Name()
-			<< " <- " << fg.GetResourceNodes().at(srcRsrcNodeIdx).Name() << endl;
+		cout << "[Move]      " << fg.GetResourceNodes()[dstRsrcNodeIdx].Name()
+			<< " <- " << fg.GetResourceNodes()[srcRsrcNodeIdx].Name() << endl;
 	}
 };
 
@@ -29,31 +29,37 @@ public:
 		const UFG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
-		auto target = crst.idx2info.find(static_cast<size_t>(-1));
-		if (target != crst.idx2info.end()) {
-			const auto& passinfo = target->second;
-			for (const auto& rsrc : passinfo.constructRsrcs)
-				rsrcMngr.Construct(fg, rsrc);
-			for (const auto& rsrc : passinfo.destructRsrcs)
-				rsrcMngr.Destruct(fg, rsrc);
-			for (const auto& rsrc : passinfo.moveRsrcs)
-				rsrcMngr.Move(fg, crst.moves_src2dst.find(rsrc)->second, rsrc);
-		}
+		auto sorted_passes = crst.passgraph.TopoSort();
+		if (!sorted_passes)
+			return;
 
-		const auto& passnodes = fg.GetPassNodes();
-		for (auto i : crst.sortedPasses) {
-			const auto& passinfo = crst.idx2info.find(i)->second;
+		std::map<size_t, size_t> remain_reader_cnt_map; // resource idx -> reader cnt
+		for (auto pass : *sorted_passes) {
+			// construct writed resources
+			for (auto output : fg.GetPassNodes()[pass].Outputs()) {
+				if (crst.moves_dst2src.contains(output))
+					continue;
 
-			for (const auto& rsrc : passinfo.constructRsrcs)
-				rsrcMngr.Construct(fg, rsrc);
+				rsrcMngr.Construct(fg, output);
+			}
 
-			cout << "[Execute]   " << passnodes[i].Name() << endl;
+			// execute
+			cout << "[Execute]   " << fg.GetPassNodes()[pass].Name() << endl;
 
-			for (const auto& rsrc : passinfo.destructRsrcs)
-				rsrcMngr.Destruct(fg, rsrc);
-
-			for (const auto& rsrc : passinfo.moveRsrcs)
-				rsrcMngr.Move(fg, crst.moves_src2dst.find(rsrc)->second, rsrc);
+			// count down readers
+			for (auto input : fg.GetPassNodes()[pass].Inputs()) {
+				if (!remain_reader_cnt_map.contains(input))
+					remain_reader_cnt_map.emplace(input, crst.rsrc2info.at(input).readers.size());
+				auto& cnt = remain_reader_cnt_map[input];
+				--cnt;
+				if (cnt == 0) {
+					// destruct or move
+					if (auto target = crst.moves_src2dst.find(input); target != crst.moves_src2dst.end())
+						rsrcMngr.Move(fg, input, target->second);
+					else
+						rsrcMngr.Destruct(fg, input);
+				}
+			}
 		}
 	}
 };
@@ -105,35 +111,30 @@ int main() {
 	cout << "------------------------[frame graph]------------------------" << endl;
 	cout << "[Resource]" << endl;
 	for (size_t i = 0; i < fg.GetResourceNodes().size(); i++)
-		cout << "- " << i << " : " << fg.GetResourceNodes().at(i).Name() << endl;
+		cout << "- " << i << " : " << fg.GetResourceNodes()[i].Name() << endl;
 	cout << "[Pass]" << endl;
 	for (size_t i = 0; i < fg.GetPassNodes().size(); i++)
-		cout << "- " << i << " : " << fg.GetPassNodes().at(i).Name() << endl;
+		cout << "- " << i << " : " << fg.GetPassNodes()[i].Name() << endl;
 
 	UFG::Compiler compiler;
 
-	auto [success, crst] = compiler.Compile(fg);
+	auto crst = compiler.Compile(fg);
+	assert(crst.has_value());
 
 	cout << "------------------------[pass graph]------------------------" << endl;
-	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
-
-	cout << "------------------------[pass order]------------------------" << endl;
-	for (size_t i = 0; i < crst.sortedPasses.size(); i++)
-		cout << i << ": " << fg.GetPassNodes().at(crst.sortedPasses[i]).Name() << endl;
+	cout << crst->passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "- " << fg.GetResourceNodes().at(idx).Name() << endl
-			<< "  - writer: " << fg.GetPassNodes().at(info.writer).Name() << endl;
+	for (const auto& [idx, info] : crst->rsrc2info) {
+		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl
+			<< "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {
 			cout << "  - readers" << endl;
 			for (auto reader : info.readers)
-				cout << "    * " << fg.GetPassNodes().at(reader).Name() << endl;
+				cout << "    * " << fg.GetPassNodes()[reader].Name() << endl;
 		}
 
-		cout << "  - lifetime: " << fg.GetPassNodes().at(crst.sortedPasses[info.first]).Name() << " - "
-			<< fg.GetPassNodes().at(crst.sortedPasses[info.last]).Name();
 		cout << endl;
 	}
 
@@ -146,7 +147,7 @@ int main() {
 
 	ResourceMngr rsrcMngr;
 	Executor executor;
-	executor.Execute(fg, crst, rsrcMngr);
+	executor.Execute(fg, *crst, rsrcMngr);
 
 	return 0;
 }
