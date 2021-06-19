@@ -134,6 +134,9 @@ int main() {
 				cout << "    * " << fg.GetPassNodes()[reader].Name() << endl;
 		}
 
+		cout << "  - lifetime: " << fg.GetPassNodes()[crst.sorted_passes[info.first]].Name() << " - "
+			<< fg.GetPassNodes()[crst.sorted_passes[info.last]].Name();
+
 		cout << endl;
 	}
 

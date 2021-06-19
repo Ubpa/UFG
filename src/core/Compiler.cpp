@@ -201,14 +201,54 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		// else [[do nothing]];
 	}
 
-	auto sortedPasses = rst.passgraph.TopoSort();
-	if (!sortedPasses)
-		throw std::logic_error("not a DAG");
+	{ // toposort
+		auto option_sorted_passes = rst.passgraph.TopoSort();
+		if (!option_sorted_passes)
+			throw std::logic_error("not a DAG");
+		rst.sorted_passes = std::move(*option_sorted_passes);
+	}
+
 
 	// move_src2dst -> move_dst2src
 	for (const auto& [src, dst] : rst.moves_src2dst) {
 		auto [iter, success] = rst.moves_dst2src.emplace(dst, src);
 		assert(success);
+	}
+
+	// set resource's first last and passinfo
+
+	rst.pass2order = vector<size_t>(rst.sorted_passes.size());
+	for (size_t i = 0; i < rst.sorted_passes.size(); i++)
+		rst.pass2order[rst.sorted_passes[i]] = i;
+
+	for (size_t i = 0; i < passes.size(); ++i)
+		rst.pass2info.emplace(i, Result::PassInfo{});
+
+	for (auto& [rsrcNodeIdx, info] : rst.rsrc2info) {
+		if (info.writer != static_cast<size_t>(-1))
+			info.first = rst.pass2order[info.writer];
+		else if (!info.readers.empty()) {
+			size_t first = static_cast<size_t>(-1); // max size_t
+			for (const auto& reader : info.readers)
+				first = std::min(first, rst.pass2order[reader]);
+			info.first = first;
+		}
+		//else [[do nothing]]; // info.first = static_cast<size_t>(-1)
+
+		info.last = info.first;
+		for (const auto& reader : info.readers)
+			info.last = std::max(info.last, rst.pass2order[reader]);
+
+		size_t firstPassIdx = info.first != static_cast<size_t>(-1) ? rst.sorted_passes[info.first]
+			: static_cast<size_t>(-1);
+		size_t lastPassIdx = info.last != static_cast<size_t>(-1) ? rst.sorted_passes[info.last]
+			: static_cast<size_t>(-1);
+		if (!rst.moves_dst2src.contains(rsrcNodeIdx))
+			rst.pass2info[firstPassIdx].construct_resources.push_back(rsrcNodeIdx);
+		if (rst.moves_src2dst.contains(rsrcNodeIdx))
+			rst.pass2info[lastPassIdx].move_resources.push_back(rsrcNodeIdx);
+		else
+			rst.pass2info[lastPassIdx].destruct_resources.push_back(rsrcNodeIdx);
 	}
 
 	return rst;

@@ -110,10 +110,6 @@ public:
 		const UFG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
-		auto sorted_passes = crst.passgraph.TopoSort();
-		if (!sorted_passes)
-			return;
-
 		std::map<size_t, size_t> remain_user_cnt_map; // resource idx -> user cnt
 		for (const auto& [rsrc, info] : crst.rsrc2info) {
 			size_t cnt = info.readers.size();
@@ -122,7 +118,7 @@ public:
 			remain_user_cnt_map.emplace(rsrc, cnt);
 		}
 
-		for (auto pass : *sorted_passes) {
+		for (auto pass : crst.sorted_passes) {
 			// construct writed resources
 			for (auto output : fg.GetPassNodes()[pass].Outputs()) {
 				if (crst.moves_dst2src.contains(output))
@@ -233,6 +229,9 @@ int main() {
 			for (auto reader : info.readers)
 				cout << "    * " << fg.GetPassNodes()[reader].Name() << endl;
 		}
+
+		cout << "  - lifetime: " << fg.GetPassNodes()[crst.sorted_passes[info.first]].Name() << " - "
+			<< fg.GetPassNodes()[crst.sorted_passes[info.last]].Name();
 
 		cout << endl;
 	}
