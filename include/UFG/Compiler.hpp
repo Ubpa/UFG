@@ -33,6 +33,7 @@ namespace Ubpa::UFG {
 			std::unordered_map<size_t, size_t> moves_dst2src;
 		};
 
+		// throw std::logic_error when compilation failing
 		Result Compile(const FrameGraph& fg);
 	};
 }
