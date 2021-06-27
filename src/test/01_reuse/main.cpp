@@ -241,6 +241,11 @@ int main() {
 	auto g = fg.ToGraphvizGraph();
 	cout << g.Dump() << endl;
 
+	cout << "------------------------[Graphviz2]------------------------" << endl;
+
+	auto g2 = fg.ToGraphvizGraph2();
+	cout << g2.Dump() << endl;
+
 	cout << "------------------------[Execute]------------------------" << endl;
 
 	ResourceMngr rsrcMngr;

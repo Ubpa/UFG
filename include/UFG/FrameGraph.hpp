@@ -56,6 +56,7 @@ namespace Ubpa::UFG {
 		void Clear() noexcept;
 
 		UGraphviz::Graph ToGraphvizGraph() const;
+		UGraphviz::Graph ToGraphvizGraph2() const;
 	private:
 		std::string name;
 		std::vector<ResourceNode> resourceNodes;

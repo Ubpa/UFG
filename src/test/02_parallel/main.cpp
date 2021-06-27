@@ -1,6 +1,6 @@
 #include <UFG/UFG.hpp>
 
-#include "ThreadPool.h"
+#include "ThreadPool.hpp"
 
 #include <iostream>
 #include <cassert>
@@ -44,13 +44,13 @@ class CommandList {
 public:
 	void Execute(std::string_view str) {
 		commandbuffer.push_back([str]() {
-			std::cout << "[Execute]   " << str << endl;
+			std::cout << "[Execute   ] " << str << endl;
 		});
 	};
 	void Transition(std::string_view name, float* buffer, Resource::State src, Resource::State dst) {
 		commandbuffer.push_back([=]() {
 			assert(Resource::GPURsrcStateMap.at(buffer) == src);
-			std::cout << "[Transition]" << name << " " << src << " -> " << dst << " @" << buffer << endl;
+			std::cout << "[Transition] " << name << " " << src << " -> " << dst << " @" << buffer << endl;
 			Resource::GPURsrcStateMap.at(buffer) = dst;
 		});
 	};
@@ -78,7 +78,7 @@ public:
 
 		if (IsImported(rsrcNodeIndex)) {
 			rsrc = importeds[rsrcNodeIndex];
-			cout << "[Construct] Import  | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
+			cout << "[Construct ] Import  | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
 		}
 		else {
 			auto type = temporals[rsrcNodeIndex];
@@ -86,13 +86,13 @@ public:
 			if (typefrees.empty()) {
 				rsrc.state = Resource::state_common;
 				rsrc.buffer = new float[type.size];
-				cout << "[Construct] Create  | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
+				cout << "[Construct ] Create  | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
 				Resource::GPURsrcStateMap[rsrc.buffer] = rsrc.state;
 			}
 			else {
 				rsrc = typefrees.back();
 				typefrees.pop_back();
-				cout << "[Construct] Reuse   | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
+				cout << "[Construct ] Reuse   | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
 			}
 		}
 		actives[rsrcNodeIndex] = rsrc;
@@ -102,7 +102,7 @@ public:
 		std::string_view srcName, size_t srcRsrcNodeIndex)
 	{
 		auto rsrc = actives[srcRsrcNodeIndex];
-		cout << "[Move]      " << dstName << " <- " << srcName << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
+		cout << "[Move      ] " << dstName << " <- " << srcName << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
 		actives[dstRsrcNodeIndex] = actives[srcRsrcNodeIndex];
 		actives.erase(srcRsrcNodeIndex);
 		if (importeds.contains(srcRsrcNodeIndex))
@@ -115,11 +115,11 @@ public:
 		auto rsrc = actives[rsrcNodeIndex];
 		if (!IsImported(rsrcNodeIndex)) {
 			pool[temporals[rsrcNodeIndex]].push_back(rsrc); // TODO
-			cout << "[Destruct]  Recycle | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
+			cout << "[Destruct  ] Recycle | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
 		}
 		else {
 			cmdlist.Transition(name, rsrc.buffer, rsrc.state, importeds.at(rsrcNodeIndex).state);
-			cout << "[Destruct]  Import  | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
+			cout << "[Destruct  ] Import  | " << name << " @" << "(" << rsrc.state << ")" << rsrc.buffer << endl;
 		}
 
 		actives.erase(rsrcNodeIndex);
@@ -189,7 +189,7 @@ public:
 		const UFG::Compiler::Result& crst,
 		ResourceMngr& rsrcMngr)
 	{
-		size_t cmdlist_num = fg.GetPassNodes().size();
+		const size_t cmdlist_num = fg.GetPassNodes().size();
 		struct CommandListInfo {
 			std::mutex mutex_done;
 			bool done{ false };
@@ -197,22 +197,6 @@ public:
 			std::condition_variable cv;
 		};
 		std::vector<CommandListInfo> cmdlistInfos(cmdlist_num);
-
-		std::thread commiter([&]() {
-			size_t cnt = 0;
-			while (cnt < cmdlist_num) {
-				std::unique_lock<std::mutex> lk(cmdlistInfos[cnt].mutex_done);
-				if (!cmdlistInfos[cnt].done)
-					cmdlistInfos[cnt].cv.wait(lk);
-				CommandList cmdlist = std::move(cmdlistInfos[cnt].cmdlist);
-				lk.unlock();
-
-				cmdlist.Run();
-				
-				++cnt;
-			}
-		});
-
 		
 		if (auto target = crst.pass2info.find(static_cast<size_t>(-1)); target != crst.pass2info.end()) {
 			CommandList init_cmdlist;
@@ -261,7 +245,18 @@ public:
 			}
 		}
 
-		commiter.join();
+		size_t cnt = 0;
+		while (cnt < cmdlist_num) {
+			std::unique_lock<std::mutex> lk(cmdlistInfos[cnt].mutex_done);
+			if (!cmdlistInfos[cnt].done)
+				cmdlistInfos[cnt].cv.wait(lk);
+			CommandList cmdlist = std::move(cmdlistInfos[cnt].cmdlist);
+			lk.unlock();
+
+			cmdlist.Run();
+
+			++cnt;
+		}
 	}
 };
 
@@ -276,10 +271,6 @@ int main() {
 	size_t lightingbuffer = fg.RegisterResourceNode("Lighting Buffer");
 	size_t finaltarget = fg.RegisterResourceNode("Final Target");
 	size_t debugoutput = fg.RegisterResourceNode("Debug Output");
-	size_t depthbuffer_reader0 = fg.RegisterResourceNode("Depth Buffer Read Pass0");
-	size_t depthbuffer_reader1 = fg.RegisterResourceNode("Depth Buffer Read Pass1");
-	size_t depthbuffer_reader2 = fg.RegisterResourceNode("Depth Buffer Read Pass2");
-	size_t depthbuffer_reader3 = fg.RegisterResourceNode("Depth Buffer Read Pass3");
 
 	size_t depth_pass = fg.RegisterPassNode(
 		"Depth pass",
@@ -359,6 +350,9 @@ int main() {
 				cout << "    * " << fg.GetPassNodes()[reader].Name() << endl;
 		}
 
+		cout << "  - lifetime: " << fg.GetPassNodes()[crst.sorted_passes[info.first]].Name() << " - "
+			<< fg.GetPassNodes()[crst.sorted_passes[info.last]].Name();
+
 		cout << endl;
 	}
 
@@ -366,6 +360,11 @@ int main() {
 
 	auto g = fg.ToGraphvizGraph();
 	cout << g.Dump() << endl;
+
+	cout << "------------------------[Graphviz2]------------------------" << endl;
+
+	auto g2 = fg.ToGraphvizGraph2();
+	cout << g2.Dump() << endl;
 
 	cout << "------------------------[Execute]------------------------" << endl;
 
