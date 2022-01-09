@@ -13,7 +13,7 @@
 namespace Ubpa::UFG {
 	// 1. Add all resource nodes first, then add pass nodes
 	// 2. write means (read + write)
-	// 3. resource lifecycle: move in -> write -> reads -> move out
+	// 3. resource lifecycle: move in -> write -> reads & copy out -> copy in -> move out
 	class FrameGraph {
 	public:
 		FrameGraph(std::string name) : name{ std::move(name) } {}
@@ -39,17 +39,53 @@ namespace Ubpa::UFG {
 		size_t RegisterResourceNode(ResourceNode node);
 		size_t RegisterResourceNode(std::string node);
 		size_t RegisterPassNode(PassNode node);
+
 		size_t RegisterPassNode(
+			PassNode::Type type,
 			std::string name,
 			std::vector<size_t> inputs,
-			std::vector<size_t> outputs
-		);
+			std::vector<size_t> outputs);
+
+		size_t RegisterGeneralPassNode(
+			std::string name,
+			std::vector<size_t> inputs,
+			std::vector<size_t> outputs);
+
+		size_t RegisterCopyPassNode(
+			std::string name,
+			std::vector<size_t> inputs,
+			std::vector<size_t> outputs);
+
+		/** The name is "Copy#<ID>". */
+		size_t RegisterCopyPassNode(
+			std::vector<size_t> inputs,
+			std::vector<size_t> outputs);
+
 		template<size_t N, size_t M>
 		size_t RegisterPassNode(
+			PassNode::Type type,
 			std::string name,
 			const std::array<std::string_view, N>& inputs_str,
-			const std::array<std::string_view, M>& outputs_str
-		);
+			const std::array<std::string_view, M>& outputs_str);
+
+		template<size_t N, size_t M>
+		size_t RegisterGeneralPassNode(
+			std::string name,
+			const std::array<std::string_view, N>& inputs_str,
+			const std::array<std::string_view, M>& outputs_str);
+
+		template<size_t N>
+		size_t RegisterCopyPassNode(
+			std::string name,
+			const std::array<std::string_view, N>& inputs_str,
+			const std::array<std::string_view, N>& outputs_str);
+
+		/** The name is "Copy#<ID>". */
+		template<size_t N>
+		size_t RegisterCopyPassNode(
+			const std::array<std::string_view, N>& inputs_str,
+			const std::array<std::string_view, N>& outputs_str);
+
 		size_t RegisterMoveNode(MoveNode node);
 		size_t RegisterMoveNode(size_t dst, size_t src);
 
@@ -58,6 +94,9 @@ namespace Ubpa::UFG {
 		UGraphviz::Graph ToGraphvizGraph() const;
 		UGraphviz::Graph ToGraphvizGraph2() const;
 	private:
+		/** The name is "Copy#<ID>". */
+		std::string GenerateCopyPassNodeName() const;
+
 		std::string name;
 		std::vector<ResourceNode> resourceNodes;
 		std::vector<PassNode> passNodes;

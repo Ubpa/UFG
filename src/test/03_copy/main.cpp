@@ -115,17 +115,16 @@ public:
 			size_t cnt = info.readers.size();
 			if (info.writer != static_cast<size_t>(-1))
 				++cnt;
+			if (info.copy_in != static_cast<size_t>(-1))
+				++cnt;
 			remain_user_cnt_map.emplace(rsrc, cnt);
 		}
 
 		for (auto pass : crst.sorted_passes) {
 			// construct writed resources
-			for (auto output : fg.GetPassNodes()[pass].Outputs()) {
-				if (crst.moves_dst2src.contains(output))
-					continue;
-
-				rsrcMngr.Construct(fg.GetResourceNodes()[output].Name(), output);
-			}
+			
+			for (auto rsrc : crst.pass2info.at(pass).construct_resources)
+				rsrcMngr.Construct(fg.GetResourceNodes()[rsrc].Name(), rsrc);
 
 			// execute
 			cout << "[Execute]   " << fg.GetPassNodes()[pass].Name() << endl;
@@ -169,6 +168,8 @@ int main() {
 	size_t gbuffer2 = fg.RegisterResourceNode("GBuffer2");
 	size_t gbuffer3 = fg.RegisterResourceNode("GBuffer3");
 	size_t lightingbuffer = fg.RegisterResourceNode("Lighting Buffer");
+	size_t prevacclightingbuffer = fg.RegisterResourceNode("Prev Acc Lighting Buffer");
+	size_t acclightingbuffer = fg.RegisterResourceNode("Acc Lighting Buffer");
 	size_t finaltarget = fg.RegisterResourceNode("Final Target");
 	size_t debugoutput = fg.RegisterResourceNode("Debug Output");
 
@@ -189,8 +190,17 @@ int main() {
 		{ lightingbuffer }
 	);
 	fg.RegisterGeneralPassNode(
+		"TAA",
+		{ prevacclightingbuffer,lightingbuffer },
+		{ acclightingbuffer }
+	);
+	fg.RegisterCopyPassNode(
+		{ acclightingbuffer },
+		{ prevacclightingbuffer }
+	);
+	fg.RegisterGeneralPassNode(
 		"Post",
-		{ lightingbuffer },
+		{ acclightingbuffer },
 		{ finaltarget }
 	);
 	fg.RegisterGeneralPassNode(
@@ -221,7 +231,10 @@ int main() {
 
 	cout << "------------------------[resource info]------------------------" << endl;
 	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
+		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl;
+
+		if (info.writer != static_cast<size_t>(-1))
+			cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {
 			cout << "  - readers" << endl;
@@ -229,8 +242,11 @@ int main() {
 				cout << "    * " << fg.GetPassNodes()[reader].Name() << endl;
 		}
 
-		cout << "  - lifetime: " << fg.GetPassNodes()[crst.sorted_passes[info.first]].Name() << " - "
-			<< fg.GetPassNodes()[crst.sorted_passes[info.last]].Name();
+		if (info.copy_in != static_cast<size_t>(-1))
+			cout << "  - copy-in:" << fg.GetPassNodes()[info.copy_in].Name() << endl;
+
+		cout << "  - lifetime: " << fg.GetPassNodes()[crst.sorted_passes[info.first]].Name()
+			<< " - " << fg.GetPassNodes()[crst.sorted_passes[info.last]].Name();
 
 		cout << endl;
 	}
@@ -250,7 +266,8 @@ int main() {
 	ResourceMngr rsrcMngr;
 
 	rsrcMngr
-		.RegisterImportedRsrc(finaltarget, { nullptr })
+		.RegisterImportedRsrc(finaltarget, { (float*)0 })
+		.RegisterImportedRsrc(prevacclightingbuffer, { (float*)1 })
 
 		.RegisterTemporalRsrc(depthbuffer, { 32 })
 		.RegisterTemporalRsrc(depthbuffer2, { 32 })
@@ -258,7 +275,8 @@ int main() {
 		.RegisterTemporalRsrc(gbuffer2, { 32 })
 		.RegisterTemporalRsrc(gbuffer3, { 32 })
 		.RegisterTemporalRsrc(debugoutput, { 32 })
-		.RegisterTemporalRsrc(lightingbuffer, { 32 });
+		.RegisterTemporalRsrc(lightingbuffer, { 32 })
+		.RegisterTemporalRsrc(acclightingbuffer, { 32 });
 
 	Executor executor;
 	executor.Execute(fg, crst, rsrcMngr);

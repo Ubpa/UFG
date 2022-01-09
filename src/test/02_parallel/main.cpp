@@ -272,53 +272,53 @@ int main() {
 	size_t finaltarget = fg.RegisterResourceNode("Final Target");
 	size_t debugoutput = fg.RegisterResourceNode("Debug Output");
 
-	size_t depth_pass = fg.RegisterPassNode(
+	size_t depth_pass = fg.RegisterGeneralPassNode(
 		"Depth pass",
 		{},
 		{ depthbuffer }
 	);
-	size_t depth_pass0 = fg.RegisterPassNode(
+	size_t depth_pass0 = fg.RegisterGeneralPassNode(
 		"Depth Buffer Read Pass0",
 		{ depthbuffer },
 		{}
 	);
-	size_t depth_pass1 = fg.RegisterPassNode(
+	size_t depth_pass1 = fg.RegisterGeneralPassNode(
 		"Depth Buffer Read Pass1",
 		{ depthbuffer },
 		{}
 	);
-	size_t depth_pass2 = fg.RegisterPassNode(
+	size_t depth_pass2 = fg.RegisterGeneralPassNode(
 		"Depth Buffer Read Pass2",
 		{ depthbuffer },
 		{}
 	);
-	size_t depth_pass3 = fg.RegisterPassNode(
+	size_t depth_pass3 = fg.RegisterGeneralPassNode(
 		"Depth Buffer Read Pass3",
 		{ depthbuffer },
 		{}
 	);
 	fg.RegisterMoveNode(depthbuffer2, depthbuffer);
-	size_t gbuffer_pass = fg.RegisterPassNode(
+	size_t gbuffer_pass = fg.RegisterGeneralPassNode(
 		"GBuffer pass",
 		{ },
 		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 }
 	);
-	size_t lighting_pass = fg.RegisterPassNode(
+	size_t lighting_pass = fg.RegisterGeneralPassNode(
 		"Lighting",
 		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 },
 		{ lightingbuffer }
 	);
-	size_t post_pass = fg.RegisterPassNode(
+	size_t post_pass = fg.RegisterGeneralPassNode(
 		"Post",
 		{ lightingbuffer },
 		{ finaltarget }
 	);
-	size_t present_pass = fg.RegisterPassNode(
+	size_t present_pass = fg.RegisterGeneralPassNode(
 		"Present",
 		{ finaltarget },
 		{ }
 	);
-	size_t debug_pass = fg.RegisterPassNode(
+	size_t debug_pass = fg.RegisterGeneralPassNode(
 		"Debug View",
 		{ gbuffer3 },
 		{ debugoutput }
@@ -341,8 +341,7 @@ int main() {
 
 	cout << "------------------------[resource info]------------------------" << endl;
 	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl
-			<< "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
+		cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {
 			cout << "  - readers" << endl;

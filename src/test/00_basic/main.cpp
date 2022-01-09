@@ -76,33 +76,33 @@ int main() {
 	size_t finaltarget = fg.RegisterResourceNode("Final Target");
 	size_t debugoutput = fg.RegisterResourceNode("Debug Output");
 
-	fg.RegisterPassNode(
+	fg.RegisterGeneralPassNode(
 		"Depth pass",
 		{},
 		{ depthbuffer }
 	);
 	fg.RegisterMoveNode(depthbuffer2, depthbuffer);
-	fg.RegisterPassNode(
+	fg.RegisterGeneralPassNode(
 		"GBuffer pass",
 		{ },
 		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 }
 	);
-	fg.RegisterPassNode(
+	fg.RegisterGeneralPassNode(
 		"Lighting",
 		{ depthbuffer2,gbuffer1,gbuffer2,gbuffer3 },
 		{ lightingbuffer }
 	);
-	fg.RegisterPassNode(
+	fg.RegisterGeneralPassNode(
 		"Post",
 		{ lightingbuffer },
 		{ finaltarget }
 	);
-	fg.RegisterPassNode(
+	fg.RegisterGeneralPassNode(
 		"Present",
 		{ finaltarget },
 		{ }
 	);
-	fg.RegisterPassNode(
+	fg.RegisterGeneralPassNode(
 		"Debug View",
 		{ gbuffer3 },
 		{ debugoutput }
@@ -125,8 +125,7 @@ int main() {
 
 	cout << "------------------------[resource info]------------------------" << endl;
 	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl
-			<< "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
+		cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {
 			cout << "  - readers" << endl;

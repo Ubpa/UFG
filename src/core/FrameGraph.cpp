@@ -44,12 +44,45 @@ size_t FrameGraph::RegisterPassNode(PassNode node) {
 }
 
 size_t FrameGraph::RegisterPassNode(
+	PassNode::Type type,
 	std::string name,
 	std::vector<size_t> inputs,
 	std::vector<size_t> outputs
 ) {
-	return RegisterPassNode(PassNode{ std::move(name), std::move(inputs), std::move(outputs) });
+	return RegisterPassNode(PassNode{ type, std::move(name), std::move(inputs), std::move(outputs) });
 }
+
+size_t FrameGraph::RegisterGeneralPassNode(
+	std::string name,
+	std::vector<size_t> inputs,
+	std::vector<size_t> outputs)
+{
+	return RegisterPassNode(PassNode::Type::General, std::move(name), std::move(inputs), std::move(outputs));
+}
+
+size_t FrameGraph::RegisterCopyPassNode(
+	std::string name,
+	std::vector<size_t> inputs,
+	std::vector<size_t> outputs)
+{
+	return RegisterPassNode(PassNode::Type::Copy, std::move(name), std::move(inputs), std::move(outputs));
+}
+
+std::string FrameGraph::GenerateCopyPassNodeName() const
+{
+	return std::string("Copy#") + std::to_string(passNodes.size());
+}
+
+size_t FrameGraph::RegisterCopyPassNode(
+	std::vector<size_t> inputs,
+	std::vector<size_t> outputs)
+{
+	return RegisterCopyPassNode(GenerateCopyPassNodeName(), std::move(inputs), std::move(outputs));
+}
+
+//
+// Move
+/////////
 
 bool FrameGraph::IsRegisteredMoveNode(size_t dst, size_t src) const {
 	auto target = srcRsrcNodeIdx2moveNodeIdx.find(src);
@@ -117,6 +150,7 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 	auto& subgraph_read = graph.GenSubgraph("Read Edges");
 	auto& subgraph_write = graph.GenSubgraph("Write Edges");
 	auto& subgraph_move = graph.GenSubgraph("Move Edges");
+	auto& subgraph_copy = graph.GenSubgraph("Copy Edges");
 
 	subgraph_rsrc
 		.RegisterGraphNodeAttr(UGraphviz::Attrs_shape, "box")
@@ -129,6 +163,7 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 	subgraph_read.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#9BBB59");
 	subgraph_write.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#ED1C24");
 	subgraph_move.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#F79646");
+	subgraph_copy.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#ED1C24");
 
 	for (const auto& rsrcNode : resourceNodes) {
 		auto rsrcIndex = registry.RegisterNode(std::string{ rsrcNode.Name() });
@@ -178,6 +213,7 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 	auto& subgraph_read = graph.GenSubgraph("Read Edges");
 	auto& subgraph_write = graph.GenSubgraph("Write Edges");
 	auto& subgraph_move = graph.GenSubgraph("Move Edges");
+	auto& subgraph_copy = graph.GenSubgraph("Copy Edges");
 
 	graph.RegisterGraphAttr(UGraphviz::Attrs_rankdir, "LR");
 
@@ -201,6 +237,9 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 
 	subgraph_move
 		.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#F79646");
+
+	subgraph_copy
+		.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#ED1C24");
 
 	for (const auto& rsrcNode : resourceNodes) {
 		auto rsrcIndex = registry.RegisterNode(std::string{ rsrcNode.Name() });

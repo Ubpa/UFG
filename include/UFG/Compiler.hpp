@@ -15,9 +15,11 @@ namespace Ubpa::UFG {
 				size_t last{ static_cast<size_t>(-1) }; // index in sorted_passes
 
 				// writer: the unique pass writing the resource
-				// readers: the passes reading the resource
-				std::vector<size_t> readers;
+				// readers: the passes reading/copy-out the resource
+				// copy_in: the unique pass copy-in the resource
 				size_t writer{ static_cast<size_t>(-1) };
+				std::vector<size_t> readers;
+				size_t copy_in{ static_cast<size_t>(-1) };
 			};
 			struct PassInfo {
 				std::vector<size_t> construct_resources;
@@ -39,6 +41,8 @@ namespace Ubpa::UFG {
 			std::vector<size_t> pass2order;
 			std::unordered_map<size_t, size_t> moves_src2dst;
 			std::unordered_map<size_t, size_t> moves_dst2src;
+			std::unordered_map<size_t, size_t> copys_src2dst;
+			std::unordered_map<size_t, size_t> copys_dst2src;
 		};
 
 		// throw std::logic_error when compilation failing

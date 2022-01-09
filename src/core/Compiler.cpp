@@ -56,16 +56,33 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 	Result rst;
 	auto passes = fg.GetPassNodes();
 
-	// set every resource's readers and writers
+	// set every resource's readers, writer, copy-in
 	for (size_t i = 0; i < passes.size(); i++) {
 		const auto& pass = passes[i];
-		for (const auto& input : pass.Inputs())
-			rst.rsrc2info[input].readers.push_back(i);
-		for (const auto& output : pass.Outputs()) {
-			auto& info = rst.rsrc2info[output];
-			if (info.writer != static_cast<size_t>(-1))
-				throw std::logic_error("multi writers");
-			rst.rsrc2info[output].writer = i;
+		switch (pass.GetType())
+		{
+		case PassNode::Type::General: {
+			for (const auto& input : pass.Inputs())
+				rst.rsrc2info[input].readers.push_back(i);
+			for (const auto& output : pass.Outputs()) {
+				size_t& writer = rst.rsrc2info[output].writer;
+				if (writer != static_cast<size_t>(-1))
+					throw std::logic_error("multi writers");
+				writer = i;
+			}
+		} break;
+		case PassNode::Type::Copy: {
+			for (size_t idx = 0; idx < pass.Inputs().size(); idx++) {
+				rst.rsrc2info[pass.Inputs()[idx]].readers.push_back(i);
+				size_t& copy_in = rst.rsrc2info[pass.Outputs()[idx]].copy_in;
+				if (copy_in != static_cast<size_t>(-1))
+					throw std::logic_error("multi copy_ins");
+				copy_in = i;
+			}
+		} break;
+		default:
+			assert(false); // no entry
+			break;
 		}
 	}
 
@@ -81,6 +98,27 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 				throw std::logic_error("move in more than once");
 			rst.moves_src2dst.emplace(src, dst);
 			movedsts.insert(dst);
+		}
+	}
+
+	// set copy map
+	{
+		std::unordered_set<size_t> copydsts;
+		for (const auto& pass : fg.GetPassNodes()) {
+			if (pass.GetType() != PassNode::Type::Copy)
+				continue;
+
+			for (size_t idx = 0; idx < pass.Inputs().size(); idx++)
+			{
+				auto src = pass.Inputs()[idx];
+				auto dst = pass.Outputs()[idx];
+				if (rst.copys_src2dst.contains(src))
+					throw std::logic_error("copy out more than once");
+				if (copydsts.contains(dst))
+					throw std::logic_error("copy in more than once");
+				rst.copys_src2dst.emplace(src, dst);
+				copydsts.insert(dst);
+			}
 		}
 	}
 
@@ -114,91 +152,66 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 	for (size_t i = 0; i < passes.size(); i++)
 		rst.passgraph.adjList.try_emplace(i);
 
-	// set resource read/write orders: unique-write-pass -> multi-read-passes
+	// set resource inner orders
 	for (const auto& [name, info] : rst.rsrc2info) {
-		if (info.writer == static_cast<size_t>(-1))
-			continue;
+		// 1. writer -> readers
+		if (info.writer != static_cast<size_t>(-1)) {
+			auto& adj = rst.passgraph.adjList[info.writer];
+			for (const auto& reader : info.readers)
+				adj.insert(reader);
+		}
 
-		auto& adj = rst.passgraph.adjList[info.writer];
-		for (const auto& reader : info.readers)
-			adj.insert(reader);
+		// 2. readers -> copy_in
+		if (info.copy_in != static_cast<size_t>(-1)) {
+			for (const auto& reader : info.readers) {
+				auto& adj = rst.passgraph.adjList[reader];
+				adj.insert(info.copy_in);
+			}
+		}
+		
+		// 3. writer -> copy_in
+		if (info.writer != static_cast<size_t>(-1)
+			&& info.readers.empty()
+			&& info.copy_in != static_cast<size_t>(-1))
+		{
+			rst.passgraph.adjList[info.writer].insert(info.copy_in);
+		}
 	}
 
 	// set resouce move order
-	for (auto [src, dst] : rst.moves_src2dst) {
+	for (const auto& [src, dst] : rst.moves_src2dst) {
 		// [src]
 		//   .
 		//   .
 		//   v
 		// [dst]
 
-		auto info_dst = rst.rsrc2info.at(dst);
-		auto info_src = rst.rsrc2info.at(src);
+		const auto& info_dst = rst.rsrc2info.at(dst);
+		const auto& info_src = rst.rsrc2info.at(src);
 
-		if (info_dst.writer != static_cast<size_t>(-1)) {
-			//           [src]
-			//             .
-			//             .
-			//             v
-			// writer -> [dst]
+		std::span<const size_t> first_accessers_dst;
+		std::span<const size_t> final_accessers_src;
 
-			if (!info_src.readers.empty()) {
-				// readers <- [src]
-				//    |         .
-				//    |         .
-				//    v         v
-				// writer  -> [dst]
+		if (info_dst.writer != static_cast<size_t>(-1))
+			first_accessers_dst = { &info_dst.writer, 1 };
+		else if (!info_dst.readers.empty())
+			first_accessers_dst = info_dst.readers;
+		else if (info_dst.copy_in != static_cast<size_t>(-1))
+			first_accessers_dst = { &info_dst.copy_in, 1 };
 
-				for (auto reader_src : info_src.readers)
-					rst.passgraph.adjList[reader_src].insert(info_dst.writer);
-			}
-			else if (info_src.writer != static_cast<size_t>(-1)) {
-				// writer -> [src]
-				//    |        .
-				//    |        .
-				//    v        v
-				// writer -> [dst]
+		if (info_src.copy_in != static_cast<size_t>(-1))
+			final_accessers_src = { &info_src.copy_in, 1 };
+		else if (!info_src.readers.empty())
+			final_accessers_src = info_src.readers;
+		else if (info_src.writer != static_cast<size_t>(-1))
+			final_accessers_src = { &info_src.writer, 1 };
 
-				rst.passgraph.adjList[info_src.writer].insert(info_dst.writer);
-			}
-			// else [do nothing]
+		for (const auto& final_accesser : final_accessers_src) {
+			rst.passgraph.adjList[final_accesser].insert(
+				first_accessers_dst.begin(),
+				first_accessers_dst.end()
+			);
 		}
-		else if (!info_dst.readers.empty()) {
-			//            [src]
-			//              .
-			//              .
-			//              v
-			// readers <- [dst]
-
-			if (!info_src.readers.empty()) {
-				// readers <- [src]
-				//    |         .
-				//    |         .
-				//    v         v
-				// readers <- [dst]
-
-				for (auto reader_src : info_src.readers) {
-					rst.passgraph.adjList[reader_src].insert(
-						info_dst.readers.begin(),
-						info_dst.readers.end()
-					);
-				}
-			}
-			else if (info_src.writer != static_cast<size_t>(-1)) {
-				// writer  -> [src]
-				//    |         .
-				//    |         .
-				//    v         v
-				// readers <- [dst]
-
-				rst.passgraph.adjList[info_src.writer].insert(
-					info_dst.readers.begin(),
-					info_dst.readers.end()
-				);
-			}
-			// else [[do nothing]];
-		}
-		// else [[do nothing]];
 	}
 
 	{ // toposort
@@ -208,10 +221,15 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		rst.sorted_passes = std::move(*option_sorted_passes);
 	}
 
-
-	// move_src2dst -> move_dst2src
+	// moves_src2dst -> moves_dst2src
 	for (const auto& [src, dst] : rst.moves_src2dst) {
 		auto [iter, success] = rst.moves_dst2src.emplace(dst, src);
+		assert(success);
+	}
+
+	// copys_src2dst -> copys_dst2src
+	for (const auto& [src, dst] : rst.copys_src2dst) {
+		auto [iter, success] = rst.copys_dst2src.emplace(dst, src);
 		assert(success);
 	}
 
@@ -222,7 +240,7 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		rst.pass2order[rst.sorted_passes[i]] = i;
 
 	for (size_t i = 0; i < passes.size(); ++i)
-		rst.pass2info.emplace(i, Result::PassInfo{});
+		rst.pass2info.emplace(i, Result::PassInfo());
 
 	for (auto& [rsrcNodeIdx, info] : rst.rsrc2info) {
 		if (info.writer != static_cast<size_t>(-1))
@@ -233,11 +251,17 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 				first = std::min(first, rst.pass2order[reader]);
 			info.first = first;
 		}
+		else if (info.copy_in != static_cast<size_t>(-1))
+			info.first = rst.pass2order[info.copy_in];
 		//else [[do nothing]]; // info.first = static_cast<size_t>(-1)
 
 		info.last = info.first;
-		for (const auto& reader : info.readers)
-			info.last = std::max(info.last, rst.pass2order[reader]);
+		if (info.copy_in != static_cast<size_t>(-1))
+			info.last = rst.pass2order[info.copy_in];
+		else {
+			for (const auto& reader : info.readers)
+				info.last = std::max(info.last, rst.pass2order[reader]);
+		}
 
 		size_t firstPassIdx = info.first != static_cast<size_t>(-1) ? rst.sorted_passes[info.first]
 			: static_cast<size_t>(-1);
@@ -273,7 +297,7 @@ UGraphviz::Graph Compiler::Result::PassGraph::ToGraphvizGraph(const FrameGraph& 
 	for (const auto& [src, dsts] : adjList) {
 		auto idx_src = registry.GetNodeIndex(std::string{ fg.GetPassNodes()[src].Name() });
 		for (auto dst : dsts) {
-			auto idx_dst = registry.GetNodeIndex(fg.GetPassNodes()[dst].Name());
+			auto idx_dst = registry.GetNodeIndex(std::string{ fg.GetPassNodes()[dst].Name() });
 			graph.AddEdge(registry.RegisterEdge(idx_src, idx_dst));
 		}
 	}
