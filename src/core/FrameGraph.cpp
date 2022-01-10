@@ -142,6 +142,8 @@ void FrameGraph::Clear() noexcept {
 UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 	UGraphviz::Graph graph(name, true);
 
+	graph.RegisterGraphAttr(UGraphviz::Attrs_rankdir, "LR");
+
 	auto& registry = graph.GetRegistry();
 
 	auto& subgraph_rsrc = graph.GenSubgraph("Resource Nodes");
@@ -163,7 +165,10 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 	subgraph_read.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#9BBB59");
 	subgraph_write.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#ED1C24");
 	subgraph_move.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#F79646");
-	subgraph_copy.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#ED1C24");
+
+	subgraph_copy
+		.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#A349A4")
+		.RegisterGraphEdgeAttr(UGraphviz::Attrs_dir, "back");
 
 	for (const auto& rsrcNode : resourceNodes) {
 		auto rsrcIndex = registry.RegisterNode(std::string{ rsrcNode.Name() });
@@ -182,8 +187,23 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 
 		for (size_t rsrcNodeIndex : passNode.Outputs()) {
 			const auto& rsrcNodeName = resourceNodes[rsrcNodeIndex].Name();
-			auto edgeIndex = registry.RegisterEdge(passIndex, registry.GetNodeIndex(rsrcNodeName));
-			subgraph_write.AddEdge(edgeIndex);
+			//auto edgeIndex = registry.RegisterEdge(passIndex, registry.GetNodeIndex(rsrcNodeName));
+			//subgraph_write.AddEdge(edgeIndex);
+
+			switch (passNode.GetType())
+			{
+			case PassNode::Type::General: {
+				auto edgeIndex = registry.RegisterEdge(passIndex, registry.GetNodeIndex(rsrcNodeName));
+				subgraph_write.AddEdge(edgeIndex);
+			} break;
+			case PassNode::Type::Copy: {
+				auto edgeIndex = registry.RegisterEdge(registry.GetNodeIndex(rsrcNodeName), passIndex);
+				subgraph_copy.AddEdge(edgeIndex);
+			} break;
+			default:
+				assert(false); // no entry
+				break;
+			}
 		}
 	}
 
@@ -205,6 +225,8 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph() const {
 UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 	UGraphviz::Graph graph(name, true);
 
+	graph.RegisterGraphAttr(UGraphviz::Attrs_rankdir, "LR");
+
 	auto& registry = graph.GetRegistry();
 
 	auto& subgraph_rsrc = graph.GenSubgraph("Resource Nodes");
@@ -214,8 +236,6 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 	auto& subgraph_write = graph.GenSubgraph("Write Edges");
 	auto& subgraph_move = graph.GenSubgraph("Move Edges");
 	auto& subgraph_copy = graph.GenSubgraph("Copy Edges");
-
-	graph.RegisterGraphAttr(UGraphviz::Attrs_rankdir, "LR");
 
 	subgraph_rsrc
 		.RegisterGraphNodeAttr(UGraphviz::Attrs_shape, "box")
@@ -239,7 +259,8 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 		.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#F79646");
 
 	subgraph_copy
-		.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#ED1C24");
+		.RegisterGraphEdgeAttr(UGraphviz::Attrs_color, "#A349A4")
+		.RegisterGraphEdgeAttr(UGraphviz::Attrs_dir, "back");
 
 	for (const auto& rsrcNode : resourceNodes) {
 		auto rsrcIndex = registry.RegisterNode(std::string{ rsrcNode.Name() });
@@ -284,7 +305,7 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 		label += "}"; // end out
 
 		label += "}"; // end inout
-		//label += "}"; // end pass
+
 		registry.RegisterNodeAttr(passIndex, UGraphviz::Attrs_label, std::move(label));
 
 		for (size_t i = 0; i < passNode.Inputs().size(); ++i) {
@@ -295,19 +316,36 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 			registry.RegisterEdgePort(
 				edgeIndex,
 				{ .compass = UGraphviz::Registry::Port::Compass::E },
-			{.ID = "in_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::W }
+				{.ID = "in_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::W }
 			);
 		}
 		for (size_t i = 0; i < passNode.Outputs().size(); ++i) {
 			size_t rsrcNodeIndex = passNode.Outputs()[i];
 			const auto& rsrcNodeName = resourceNodes[rsrcNodeIndex].Name();
-			auto edgeIndex = registry.RegisterEdge(passIndex, registry.GetNodeIndex(rsrcNodeName));
-			subgraph_write.AddEdge(edgeIndex);
-			registry.RegisterEdgePort(
-				edgeIndex,
-				{ .ID = "out_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::E },
-				{ .compass = UGraphviz::Registry::Port::Compass::W }
-			);
+			switch (passNode.GetType())
+			{
+			case PassNode::Type::General: {
+				auto edgeIndex = registry.RegisterEdge(passIndex, registry.GetNodeIndex(rsrcNodeName));
+				subgraph_write.AddEdge(edgeIndex);
+				registry.RegisterEdgePort(
+					edgeIndex,
+					{ .ID = "out_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::E },
+					{ .compass = UGraphviz::Registry::Port::Compass::W }
+				);
+			} break;
+			case PassNode::Type::Copy: {
+				auto edgeIndex = registry.RegisterEdge(registry.GetNodeIndex(rsrcNodeName), passIndex);
+				subgraph_copy.AddEdge(edgeIndex);
+				registry.RegisterEdgePort(
+					edgeIndex,
+					{ .compass = UGraphviz::Registry::Port::Compass::NW },
+					{ .ID = "out_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::NE }
+				);
+			} break;
+			default:
+				assert(false); // no entry
+				break;
+			}
 		}
 	}
 
