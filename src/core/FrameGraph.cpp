@@ -338,8 +338,8 @@ UGraphviz::Graph FrameGraph::ToGraphvizGraph2() const {
 				subgraph_copy.AddEdge(edgeIndex);
 				registry.RegisterEdgePort(
 					edgeIndex,
-					{ .compass = UGraphviz::Registry::Port::Compass::NW },
-					{ .ID = "out_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::NE }
+					{ .compass = UGraphviz::Registry::Port::Compass::NE },
+					{ .ID = "out_" + std::to_string(i), .compass = UGraphviz::Registry::Port::Compass::E }
 				);
 			} break;
 			default:
