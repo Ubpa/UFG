@@ -340,7 +340,7 @@ int main() {
 	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [idx, info] : crst.rsrc2info) {
+	for (const auto& info : crst.rsrcinfos) {
 		cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {

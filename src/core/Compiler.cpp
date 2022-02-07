@@ -56,6 +56,8 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 	Result rst;
 	auto passes = fg.GetPassNodes();
 
+	rst.rsrcinfos.resize(fg.GetResourceNodes().size());
+
 	// set every resource's readers, writer, copy-in
 	for (size_t i = 0; i < passes.size(); i++) {
 		const auto& pass = passes[i];
@@ -63,9 +65,9 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		{
 		case PassNode::Type::General: {
 			for (const auto& input : pass.Inputs())
-				rst.rsrc2info[input].readers.push_back(i);
+				rst.rsrcinfos[input].readers.push_back(i);
 			for (const auto& output : pass.Outputs()) {
-				size_t& writer = rst.rsrc2info[output].writer;
+				size_t& writer = rst.rsrcinfos[output].writer;
 				if (writer != static_cast<size_t>(-1))
 					throw std::logic_error("multi writers");
 				writer = i;
@@ -73,8 +75,8 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		} break;
 		case PassNode::Type::Copy: {
 			for (size_t idx = 0; idx < pass.Inputs().size(); idx++) {
-				rst.rsrc2info[pass.Inputs()[idx]].readers.push_back(i);
-				size_t& copy_in = rst.rsrc2info[pass.Outputs()[idx]].copy_in;
+				rst.rsrcinfos[pass.Inputs()[idx]].readers.push_back(i);
+				size_t& copy_in = rst.rsrcinfos[pass.Outputs()[idx]].copy_in;
 				if (copy_in != static_cast<size_t>(-1))
 					throw std::logic_error("multi copy_ins");
 				copy_in = i;
@@ -132,7 +134,7 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 			continue;
 		}
 
-		const auto& info = rst.rsrc2info.at(dst);
+		const auto& info = rst.rsrcinfos[dst];
 		auto next = rst.moves_src2dst.find(dst);
 		if (info.writer == static_cast<size_t>(-1)
 			&& info.readers.empty()
@@ -153,7 +155,7 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		rst.passgraph.adjList.try_emplace(i);
 
 	// set resource inner orders
-	for (const auto& [name, info] : rst.rsrc2info) {
+	for (const auto& info : rst.rsrcinfos) {
 		// 1. writer -> readers
 		if (info.writer != static_cast<size_t>(-1)) {
 			auto& adj = rst.passgraph.adjList[info.writer];
@@ -186,8 +188,8 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		//   v
 		// [dst]
 
-		const auto& info_dst = rst.rsrc2info.at(dst);
-		const auto& info_src = rst.rsrc2info.at(src);
+		const auto& info_dst = rst.rsrcinfos[dst];
+		const auto& info_src = rst.rsrcinfos[src];
 
 		std::span<const size_t> first_accessers_dst;
 		std::span<const size_t> final_accessers_src;
@@ -242,7 +244,9 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 	for (size_t i = 0; i < passes.size(); ++i)
 		rst.pass2info.emplace(i, Result::PassInfo());
 
-	for (auto& [rsrcNodeIdx, info] : rst.rsrc2info) {
+	for (size_t rsrcNodeIdx = 0; rsrcNodeIdx < rst.rsrcinfos.size(); rsrcNodeIdx++) {
+		auto& info = rst.rsrcinfos[rsrcNodeIdx];
+
 		if (info.writer != static_cast<size_t>(-1))
 			info.first = rst.pass2order[info.writer];
 		else if (!info.readers.empty()) {
@@ -259,9 +263,31 @@ Compiler::Result Compiler::Compile(const FrameGraph& fg) {
 		if (info.copy_in != static_cast<size_t>(-1))
 			info.last = rst.pass2order[info.copy_in];
 		else {
-			for (const auto& reader : info.readers)
-				info.last = std::max(info.last, rst.pass2order[reader]);
+			for (const auto& reader : info.readers) {
+				if (info.last == static_cast<size_t>(-1))
+					info.last = rst.pass2order[reader];
+				else
+					info.last = std::max(info.last, rst.pass2order[reader]);
+			}
 		}
+	}
+
+	for (size_t rsrcNodeIdx = 0; rsrcNodeIdx < rst.rsrcinfos.size(); rsrcNodeIdx++) {
+		auto& info = rst.rsrcinfos[rsrcNodeIdx];
+
+		if (info.first == static_cast<size_t>(-1)) {
+			auto target = rst.moves_dst2src.find(rsrcNodeIdx);
+			if (target != rst.moves_dst2src.end()) {
+				info.first = rst.rsrcinfos[target->second].last;
+				if (info.last == static_cast<size_t>(-1))
+					info.last = info.first;
+				assert(info.last >= info.first);
+			}
+		}
+	}
+
+	for (size_t rsrcNodeIdx = 0; rsrcNodeIdx < rst.rsrcinfos.size(); rsrcNodeIdx++) {
+		const auto& info = rst.rsrcinfos[rsrcNodeIdx];
 
 		size_t firstPassIdx = info.first != static_cast<size_t>(-1) ? rst.sorted_passes[info.first]
 			: static_cast<size_t>(-1);

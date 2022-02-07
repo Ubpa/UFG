@@ -34,7 +34,7 @@ namespace Ubpa::UFG {
 				UGraphviz::Graph ToGraphvizGraph(const FrameGraph& fg) const;
 			};
 
-			std::unordered_map<size_t, RsrcInfo> rsrc2info;
+			std::vector<RsrcInfo> rsrcinfos;
 			PassGraph passgraph;
 			std::vector<size_t> sorted_passes;
 			std::unordered_map<size_t, PassInfo> pass2info;

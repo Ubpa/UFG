@@ -111,13 +111,15 @@ public:
 		ResourceMngr& rsrcMngr)
 	{
 		std::map<size_t, size_t> remain_user_cnt_map; // resource idx -> user cnt
-		for (const auto& [rsrc, info] : crst.rsrc2info) {
+		for (size_t rsrcNodeIdx = 0; rsrcNodeIdx < crst.rsrcinfos.size(); rsrcNodeIdx++) {
+			const auto& info = crst.rsrcinfos[rsrcNodeIdx];
+
 			size_t cnt = info.readers.size();
 			if (info.writer != static_cast<size_t>(-1))
 				++cnt;
 			if (info.copy_in != static_cast<size_t>(-1))
 				++cnt;
-			remain_user_cnt_map.emplace(rsrc, cnt);
+			remain_user_cnt_map.emplace(rsrcNodeIdx, cnt);
 		}
 
 		for (auto pass : crst.sorted_passes) {
@@ -230,8 +232,10 @@ int main() {
 	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [idx, info] : crst.rsrc2info) {
-		cout << "- " << fg.GetResourceNodes()[idx].Name() << endl;
+	for (size_t rsrcNodeIdx = 0; rsrcNodeIdx < crst.rsrcinfos.size(); rsrcNodeIdx++) {
+		const auto& info = crst.rsrcinfos[rsrcNodeIdx];
+
+		cout << "- " << fg.GetResourceNodes()[rsrcNodeIdx].Name() << endl;
 
 		if (info.writer != static_cast<size_t>(-1))
 			cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;

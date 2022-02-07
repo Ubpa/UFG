@@ -49,7 +49,7 @@ public:
 			// count down readers
 			for (auto input : fg.GetPassNodes()[pass].Inputs()) {
 				if (!remain_reader_cnt_map.contains(input))
-					remain_reader_cnt_map.emplace(input, crst.rsrc2info.at(input).readers.size());
+					remain_reader_cnt_map.emplace(input, crst.rsrcinfos[input].readers.size());
 				auto& cnt = remain_reader_cnt_map[input];
 				--cnt;
 				if (cnt == 0) {
@@ -124,7 +124,7 @@ int main() {
 	cout << crst.passgraph.ToGraphvizGraph(fg).Dump() << endl;
 
 	cout << "------------------------[resource info]------------------------" << endl;
-	for (const auto& [idx, info] : crst.rsrc2info) {
+	for (const auto& info : crst.rsrcinfos) {
 		cout << "  - writer: " << fg.GetPassNodes()[info.writer].Name() << endl;
 
 		if (!info.readers.empty()) {
